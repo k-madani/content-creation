@@ -1,9 +1,11 @@
 import os
 from crewai import Agent
 from crewai_tools import SerperDevTool
+from tools.tone_analyzer import ToneAnalyzerTool
 
 # Initialize tools
 search_tool = SerperDevTool()
+tone_tool = ToneAnalyzerTool()
 
 def create_research_agent():
     """Research agent that gathers information from web sources"""
@@ -19,16 +21,28 @@ def create_research_agent():
         allow_delegation=False
     )
 
+def create_tone_analysis_agent():
+    """Agent that analyzes and defines writing tone"""
+    return Agent(
+        role='Tone Analyst',
+        goal='Analyze writing style and provide guidelines for consistent tone',
+        backstory='''You are an expert in communication and writing style analysis. 
+                     You understand how different tones affect reader perception and 
+                     can provide clear guidelines for matching specific writing styles.''',
+        tools=[tone_tool],
+        verbose=True,
+        allow_delegation=False
+    )
+
 def create_writer_agent():
     """Writer agent that creates engaging content"""
     return Agent(
         role='Content Writer',
-        goal='Write clear, engaging, and informative content based on research provided',
+        goal='Write clear, engaging, and informative content following provided tone guidelines',
         backstory='''You are a professional content writer with 10 years of experience 
-                     creating blog posts and articles. You write in a clear, accessible 
-                     style that engages readers. You know how to explain complex topics 
-                     simply without being condescending. You structure content logically 
-                     with good flow between sections.''',
+                     creating blog posts and articles. You excel at adapting your writing 
+                     style to match specific tones and audiences. You write in a clear, 
+                     accessible style that engages readers while following tone guidelines precisely.''',
         verbose=True,
         allow_delegation=False
     )
