@@ -60,3 +60,21 @@ def create_editor_agent():
         verbose=True,
         allow_delegation=False
     )
+
+def create_seo_agent():
+    """Agent that optimizes content for SEO"""
+    from tools.seo_optimizer import SEOOptimizerTool
+    
+    seo_tool = SEOOptimizerTool()
+    
+    return Agent(
+        role='SEO Specialist',
+        goal='Optimize content for search engines while maintaining quality and readability',
+        backstory='''You are an SEO expert who understands both technical optimization 
+                     and user experience. You know how to improve search rankings without 
+                     sacrificing content quality. You provide clear, actionable recommendations 
+                     for content optimization.''',
+        tools=[],  # SEO tool will be called manually in task
+        verbose=True,
+        allow_delegation=False
+    )

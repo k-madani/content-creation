@@ -93,3 +93,34 @@ def create_editing_task(agent):
         - Ready for immediate publication''',
         agent=agent
     )
+
+def create_seo_task(agent, target_keyword=None):
+    """Task for SEO analysis and optimization recommendations"""
+    
+    keyword_instruction = ""
+    if target_keyword:
+        keyword_instruction = f"\nFocus optimization on target keyword: '{target_keyword}'"
+    
+    return Task(
+        description=f'''Analyze the edited blog post for SEO effectiveness.
+        
+        Provide a comprehensive SEO analysis including:
+        - Content length and structure assessment
+        - Readability score
+        - Keyword usage and placement{keyword_instruction}
+        - Header structure evaluation
+        - Link analysis
+        - Overall SEO score
+        
+        Then provide specific, actionable recommendations to improve SEO performance.
+        
+        Format your analysis clearly with the SEO score and prioritized recommendations.''',
+        expected_output='''A detailed SEO analysis report containing:
+        - SEO metrics and scores
+        - Keyword analysis (if applicable)
+        - Readability assessment
+        - Structural evaluation
+        - Prioritized list of actionable recommendations
+        - Overall SEO score with explanation''',
+        agent=agent
+    )

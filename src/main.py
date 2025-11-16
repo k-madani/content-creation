@@ -5,35 +5,43 @@ from crewai import Crew, Process
 from agents.content_agents import (
     create_research_agent,
     create_writer_agent,
-    create_editor_agent
+    create_editor_agent,
+    create_seo_agent
 )
 from tasks.content_tasks import (
     create_research_task,
     create_writing_task,
-    create_editing_task
+    create_editing_task,
+    create_seo_task
 )
 from tools.tone_analyzer import ToneAnalyzerTool
+from tools.seo_optimizer import SEOOptimizerTool
 
 # Load environment variables
 load_dotenv()
 os.environ["OPENAI_MODEL_NAME"] = "gpt-4o-mini"
 
-def create_content(topic, tone_reference=None):
+def create_content(topic, tone_reference=None, target_keyword=None, enable_seo=True):
     """
     Main function to orchestrate content creation
     
     Args:
         topic: The topic to write about
         tone_reference: Optional text or URL to analyze for tone matching
+        target_keyword: Optional keyword to optimize for
+        enable_seo: Whether to run SEO analysis
         
     Returns:
-        The final polished blog post
+        The final polished blog post with optional SEO analysis
     """
     
     print("\n" + "=" * 70)
-    print(f"CONTENT CREATION SYSTEM")
+    print(f"CONTENTCRAFT AI - CONTENT CREATION SYSTEM")
     print("=" * 70)
     print(f"\nTopic: {topic}")
+    
+    if target_keyword:
+        print(f"Target Keyword: {target_keyword}")
     
     # Analyze tone if reference provided
     tone_guidelines = None
@@ -44,34 +52,49 @@ def create_content(topic, tone_reference=None):
         tone_guidelines = tone_analyzer.run(tone_reference)
         print("Tone analysis complete!")
     
-    print(f"Started: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-    print("\n" + "=" * 70 + "\n")
+    print(f"\nStarted: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    print("=" * 70 + "\n")
     
     # Create agents
     print("Initializing agents...")
-    research_agent = create_research_agent()
-    writer_agent = create_writer_agent()
-    editor_agent = create_editor_agent()
-    print("Agents created: Research, Writer, Editor\n")
+    agents = [
+        create_research_agent(),
+        create_writer_agent(),
+        create_editor_agent()
+    ]
+    
+    agent_names = "Research, Writer, Editor"
+    
+    if enable_seo:
+        agents.append(create_seo_agent())
+        agent_names += ", SEO Specialist"
+    
+    print(f"Agents created: {agent_names}\n")
     
     # Create tasks
     print("Creating tasks...")
-    research_task = create_research_task(research_agent, topic)
+    tasks = [
+        create_research_task(agents[0], topic)
+    ]
     
     # Enhanced writing task with tone guidelines
     if tone_guidelines:
-        writing_task = create_writing_task_with_tone(writer_agent, topic, tone_guidelines)
+        tasks.append(create_writing_task_with_tone(agents[1], topic, tone_guidelines))
     else:
-        writing_task = create_writing_task(writer_agent, topic)
+        tasks.append(create_writing_task(agents[1], topic))
     
-    editing_task = create_editing_task(editor_agent)
-    print("Tasks created: Research, Writing, Editing\n")
+    tasks.append(create_editing_task(agents[2]))
+    
+    if enable_seo:
+        tasks.append(create_seo_task(agents[3], target_keyword))
+    
+    print(f"Tasks created: {len(tasks)} tasks\n")
     
     # Create crew with sequential process
     print("Assembling crew...\n")
     crew = Crew(
-        agents=[research_agent, writer_agent, editor_agent],
-        tasks=[research_task, writing_task, editing_task],
+        agents=agents,
+        tasks=tasks,
         process=Process.sequential,
         verbose=True
     )
@@ -86,6 +109,21 @@ def create_content(topic, tone_reference=None):
     print("\n" + "=" * 70)
     print("WORKFLOW COMPLETE")
     print("=" * 70 + "\n")
+    
+    # If SEO enabled, also run detailed SEO analysis on final content
+    if enable_seo and not isinstance(result, str):
+        result_str = str(result)
+    else:
+        result_str = result
+    
+    if enable_seo:
+        print("\nRunning detailed SEO analysis...")
+        seo_tool = SEOOptimizerTool()
+        seo_report = seo_tool.run(result_str, target_keyword)
+        
+        # Append SEO report to output
+        result_with_seo = f"{result_str}\n\n{'='*70}\nSEO ANALYSIS\n{'='*70}\n{seo_report}"
+        return result_with_seo
     
     return result
 
@@ -145,8 +183,8 @@ def main():
     print("CONTENTCRAFT AI - Multi-Agent Content Creation System")
     print("=" * 70)
     print("\nModel: gpt-4o-mini")
-    print("Agents: Research, Writer, Editor")
-    print("Custom Tool: Tone Analyzer")
+    print("Agents: Research, Writer, Editor, SEO Specialist")
+    print("Custom Tools: Tone Analyzer, SEO Optimizer")
     print("\n" + "=" * 70 + "\n")
     
     # Get topic from user
@@ -156,26 +194,39 @@ def main():
         print("Error: Topic cannot be empty")
         return
     
+    # Ask for target keyword
+    print("\nEnter a target keyword for SEO optimization (optional):")
+    target_keyword = input("Target keyword (or press Enter to skip): ").strip()
+    if not target_keyword:
+        target_keyword = None
+    
     # Ask if user wants tone matching
     print("\nDo you want to match a specific writing tone?")
     print("You can provide:")
-    print("  1. A URL to analyze (e.g., https://example.com/article)")
+    print("  1. A URL to analyze")
     print("  2. Sample text (paste a paragraph)")
-    print("  3. Just press Enter to skip tone matching")
+    print("  3. Just press Enter to skip")
     
-    tone_ref = input("\nTone reference (URL or text, or Enter to skip): ").strip()
+    tone_ref = input("\nTone reference (or Enter to skip): ").strip()
     
-    if tone_ref:
-        print(f"\nGenerating content about: '{topic}'")
-        print("With tone matching enabled")
-    else:
-        print(f"\nGenerating content about: '{topic}'")
+    if not tone_ref:
         tone_ref = None
     
-    print("This will take 5-10 minutes...\n")
+    # Summary
+    print(f"\n{'='*70}")
+    print("GENERATION SETTINGS:")
+    print(f"{'='*70}")
+    print(f"Topic: {topic}")
+    print(f"Target Keyword: {target_keyword if target_keyword else 'None'}")
+    print(f"Tone Matching: {'Enabled' if tone_ref else 'Disabled'}")
+    print(f"SEO Analysis: Enabled")
+    print(f"{'='*70}\n")
+    
+    print("Estimated time: 8-12 minutes")
+    print("Starting content generation...\n")
     
     # Generate content
-    result = create_content(topic, tone_ref)
+    result = create_content(topic, tone_ref, target_keyword, enable_seo=True)
     
     # Save output
     output_file = save_output(result, topic)
