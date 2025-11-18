@@ -1,11 +1,11 @@
 import os
 from crewai import Agent
-from crewai_tools import SerperDevTool
-from tools.tone_analyzer import ToneAnalyzerTool
+from crewai_tools import SerperDevTool, ScrapeWebsiteTool, FileReadTool
 
 # Initialize tools
 search_tool = SerperDevTool()
-tone_tool = ToneAnalyzerTool()
+scrape_tool = ScrapeWebsiteTool()
+file_tool = FileReadTool()
 
 def create_research_agent():
     """Research agent that gathers information from web sources"""
@@ -16,20 +16,7 @@ def create_research_agent():
                      finding credible sources and verifying information. You excel at 
                      distinguishing between reliable and unreliable sources. You always 
                      cross-reference facts and provide comprehensive research summaries.''',
-        tools=[search_tool],
-        verbose=True,
-        allow_delegation=False
-    )
-
-def create_tone_analysis_agent():
-    """Agent that analyzes and defines writing tone"""
-    return Agent(
-        role='Tone Analyst',
-        goal='Analyze writing style and provide guidelines for consistent tone',
-        backstory='''You are an expert in communication and writing style analysis. 
-                     You understand how different tones affect reader perception and 
-                     can provide clear guidelines for matching specific writing styles.''',
-        tools=[tone_tool],
+        tools=[search_tool, scrape_tool],  # Added scrape_tool
         verbose=True,
         allow_delegation=False
     )
@@ -63,10 +50,6 @@ def create_editor_agent():
 
 def create_seo_agent():
     """Agent that optimizes content for SEO"""
-    from tools.seo_optimizer import SEOOptimizerTool
-    
-    seo_tool = SEOOptimizerTool()
-    
     return Agent(
         role='SEO Specialist',
         goal='Optimize content for search engines while maintaining quality and readability',
@@ -74,7 +57,6 @@ def create_seo_agent():
                      and user experience. You know how to improve search rankings without 
                      sacrificing content quality. You provide clear, actionable recommendations 
                      for content optimization.''',
-        tools=[],  # SEO tool will be called manually in task
         verbose=True,
         allow_delegation=False
     )

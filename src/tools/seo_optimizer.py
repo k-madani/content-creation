@@ -2,6 +2,7 @@ import re
 import textstat
 from typing import Dict, List
 from collections import Counter
+from utils.error_handler import handle_errors
 
 
 class SEOOptimizerTool:
@@ -13,6 +14,7 @@ class SEOOptimizerTool:
     description: str = """Analyzes content for SEO effectiveness and provides optimization recommendations.
     Includes keyword analysis, readability scoring, and SEO best practices."""
 
+    @handle_errors(error_message="SEO analysis failed")
     def run(self, content: str, target_keyword: str = None) -> str:
         """
         Analyze content for SEO and provide recommendations
@@ -24,20 +26,16 @@ class SEOOptimizerTool:
         Returns:
             SEO analysis report with recommendations
         """
-        try:
-            if not content or len(content) < 100:
-                return "Error: Content too short for SEO analysis (need at least 100 characters)"
-            
-            # Perform SEO analysis
-            seo_metrics = self._analyze_seo(content, target_keyword)
-            
-            # Generate recommendations
-            recommendations = self._generate_recommendations(seo_metrics)
-            
-            return self._format_results(seo_metrics, recommendations)
-            
-        except Exception as e:
-            return f"Error analyzing SEO: {str(e)}"
+        if not content or len(content) < 100:
+            return "Error: Content too short for SEO analysis (need at least 100 characters)"
+        
+        # Perform SEO analysis
+        seo_metrics = self._analyze_seo(content, target_keyword)
+        
+        # Generate recommendations
+        recommendations = self._generate_recommendations(seo_metrics)
+        
+        return self._format_results(seo_metrics, recommendations)
     
     def _analyze_seo(self, content: str, target_keyword: str = None) -> Dict:
         """Perform comprehensive SEO analysis"""
@@ -300,4 +298,4 @@ RECOMMENDATIONS:
         if metrics['has_meta_description']:
             score += 10
         
-        return min(score, 100) 
+        return min(score, 100)

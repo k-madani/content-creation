@@ -3,6 +3,7 @@ from bs4 import BeautifulSoup
 import textstat
 import re
 from typing import Dict
+from utils.error_handler import handle_errors
 
 
 class ToneAnalyzerTool:
@@ -15,6 +16,7 @@ class ToneAnalyzerTool:
     Extracts metrics like formality, readability, sentence structure, and generates
     style guidelines that can be used to match a specific writing tone."""
 
+    @handle_errors(error_message="Tone analysis failed")
     def run(self, content: str) -> str:
         """
         Analyze tone and style from content
@@ -25,26 +27,22 @@ class ToneAnalyzerTool:
         Returns:
             Detailed tone analysis with style guidelines
         """
-        try:
-            # Check if input is URL or text
-            if content.startswith('http'):
-                text = self._fetch_content_from_url(content)
-            else:
-                text = content
-            
-            if not text or len(text) < 100:
-                return "Error: Content too short for meaningful analysis (need at least 100 characters)"
-            
-            # Perform analysis
-            analysis = self._analyze_text(text)
-            
-            # Generate style guidelines
-            guidelines = self._generate_style_guidelines(analysis)
-            
-            return self._format_results(analysis, guidelines)
-            
-        except Exception as e:
-            return f"Error analyzing tone: {str(e)}"
+        # Check if input is URL or text
+        if content.startswith('http'):
+            text = self._fetch_content_from_url(content)
+        else:
+            text = content
+        
+        if not text or len(text) < 100:
+            return "Error: Content too short for meaningful analysis (need at least 100 characters)"
+        
+        # Perform analysis
+        analysis = self._analyze_text(text)
+        
+        # Generate style guidelines
+        guidelines = self._generate_style_guidelines(analysis)
+        
+        return self._format_results(analysis, guidelines)
     
     def _fetch_content_from_url(self, url: str) -> str:
         """Fetch and extract text content from URL"""

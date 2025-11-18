@@ -16,11 +16,14 @@ from tasks.content_tasks import (
 )
 from tools.tone_analyzer import ToneAnalyzerTool
 from tools.seo_optimizer import SEOOptimizerTool
+from utils.error_handler import retry_with_backoff, log_performance
 
 # Load environment variables
 load_dotenv()
 os.environ["OPENAI_MODEL_NAME"] = "gpt-4o-mini"
 
+@retry_with_backoff(max_retries=3)
+@log_performance
 def create_content(topic, tone_reference=None, target_keyword=None, enable_seo=True):
     """
     Main function to orchestrate content creation
