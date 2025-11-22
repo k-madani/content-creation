@@ -1,9 +1,33 @@
-crewai==0.28.8
-crewai-tools==0.1.6
-langchain>=0.1.10,<0.2.0
-langchain-openai>=0.0.2
-python-dotenv>=1.0.0
-requests>=2.31.0
+# Core Dependencies
+crewai>=0.70.0
+crewai-tools>=0.12.0
+
+# LLM Providers - Compatible versions
+google-generativeai>=0.8.0
+groq>=0.11.0
+langchain-groq>=0.2.0
+langchain-google-genai>=2.0.0
+langchain-core>=0.3.15,<0.4.0
+langchain>=0.3.0
+ollama>=0.3.0
+
+# Research Tools
+wikipedia>=1.4.0
+duckduckgo-search>=6.0.0
+requests>=2.32.0
 beautifulsoup4>=4.12.0
-openai>=1.0.0
-rich>=13.0.0
+
+# SEO and Content Analysis
+nltk>=3.9.0
+textblob>=0.18.0
+langdetect>=1.0.9
+textstat>=0.7.3
+
+# Utilities
+python-dotenv>=1.0.0
+pydantic>=2.10.0
+pydantic-settings>=2.6.0
+
+# Testing
+pytest>=8.3.0
+pytest-asyncio>=0.24.0

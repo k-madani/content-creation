@@ -1,62 +1,119 @@
-import os
+"""
+Content Creation Agents with Free LLM Support
+Uses LiteLLM format for model names
+"""
+
 from crewai import Agent
-from crewai_tools import SerperDevTool, ScrapeWebsiteTool, FileReadTool
+import os
+from dotenv import load_dotenv
 
-# Initialize tools
-search_tool = SerperDevTool()
-scrape_tool = ScrapeWebsiteTool()
-file_tool = FileReadTool()
+load_dotenv()
 
-def create_research_agent():
-    """Research agent that gathers information from web sources"""
-    return Agent(
-        role='Content Researcher',
-        goal='Gather accurate, relevant, and up-to-date information on any given topic',
-        backstory='''You are an experienced research journalist with expertise in 
-                     finding credible sources and verifying information. You excel at 
-                     distinguishing between reliable and unreliable sources. You always 
-                     cross-reference facts and provide comprehensive research summaries.''',
-        tools=[search_tool, scrape_tool],  # Added scrape_tool
-        verbose=True,
-        allow_delegation=False
-    )
+class ContentAgents:
+    """Factory class for creating content creation agents"""
+    
+    def __init__(self):
+        """Initialize LLM configurations"""
+        self.gemini_key = os.getenv("GEMINI_API_KEY")
+        self.groq_key = os.getenv("GROQ_API_KEY")
+        self.llm_strategy = os.getenv("LLM_STRATEGY", "gemini_first")
+        
+        # Set API keys in environment for LiteLLM
+        if self.gemini_key:
+            os.environ["GEMINI_API_KEY"] = self.gemini_key
+        if self.groq_key:
+            os.environ["GROQ_API_KEY"] = self.groq_key
+        
+        # Initialize primary LLM (string format for LiteLLM)
+        self.llm = self._get_primary_llm()
+        self.fallback_llm = self._get_fallback_llm()
+    
+    def _get_primary_llm(self):
+        """Get primary LLM in LiteLLM format"""
+        if self.llm_strategy == "groq_first" and self.groq_key:
+            print("🟠 Using Groq as primary LLM")
+            return "groq/llama-3.3-70b-versatile"
+        elif self.gemini_key:
+            print("🔵 Using Gemini as primary LLM")
+            return "gemini/gemini-1.5-flash"
+        elif self.groq_key:
+            print("🟠 Using Groq as primary LLM (Gemini not available)")
+            return "groq/llama-3.3-70b-versatile"
+        else:
+            raise Exception(
+                "No LLM provider available. Please add GEMINI_API_KEY or GROQ_API_KEY to .env file"
+            )
+    
+    def _get_fallback_llm(self):
+        """Get fallback LLM"""
+        if self.groq_key:
+            return "groq/llama-3.3-70b-versatile"
+        else:
+            return self.llm
+    
+    def research_agent(self, tools: list) -> Agent:
+        """Research Agent - Gathers information and insights"""
+        return Agent(
+            role="Content Research Specialist",
+            goal="Conduct comprehensive research on given topics using available tools. Gather accurate, up-to-date information from multiple sources.",
+            backstory="You are an expert research analyst with years of experience in content research. You have a keen eye for finding reliable sources and synthesizing complex topics into clear insights.",
+            tools=tools,
+            llm=self.llm,
+            verbose=True,
+            allow_delegation=False,
+            max_iter=5
+        )
+    
+    def writer_agent(self, tools: list) -> Agent:
+        """Writer Agent - Creates engaging content"""
+        return Agent(
+            role="Content Writer",
+            goal="Create high-quality, engaging content that resonates with the target audience.",
+            backstory="You are a professional content writer with extensive experience across multiple formats. You understand audience psychology and storytelling principles.",
+            tools=tools,
+            llm=self.llm,
+            verbose=True,
+            allow_delegation=False,
+            max_iter=5
+        )
+    
+    def editor_agent(self, tools: list) -> Agent:
+        """Editor Agent - Refines and polishes content"""
+        return Agent(
+            role="Content Editor",
+            goal="Review, refine, and polish content to ensure highest quality.",
+            backstory="You are an experienced content editor with a sharp eye for detail. You excel at improving structure and maintaining consistent tone.",
+            tools=tools,
+            llm=self.llm,
+            verbose=True,
+            allow_delegation=False,
+            max_iter=5
+        )
+    
+    def seo_agent(self, tools: list) -> Agent:
+        """SEO Agent - Optimizes content for search engines"""
+        return Agent(
+            role="SEO Specialist",
+            goal="Optimize content for search engines while maintaining readability and user value.",
+            backstory="You are an SEO expert with deep knowledge of search engine algorithms. You excel at keyword research and on-page optimization.",
+            tools=tools,
+            llm=self.llm,
+            verbose=True,
+            allow_delegation=False,
+            max_iter=5
+        )
+    
+    def controller_agent(self) -> Agent:
+        """Controller Agent - Orchestrates the content creation workflow"""
+        return Agent(
+            role="Content Project Manager",
+            goal="Orchestrate the entire content creation process by coordinating research, writing, editing, and SEO optimization.",
+            backstory="You are an experienced project manager specializing in content creation workflows. You excel at delegating work effectively and ensuring quality.",
+            llm=self.llm,
+            verbose=True,
+            allow_delegation=True,
+            max_iter=10
+        )
 
-def create_writer_agent():
-    """Writer agent that creates engaging content"""
-    return Agent(
-        role='Content Writer',
-        goal='Write clear, engaging, and informative content following provided tone guidelines',
-        backstory='''You are a professional content writer with 10 years of experience 
-                     creating blog posts and articles. You excel at adapting your writing 
-                     style to match specific tones and audiences. You write in a clear, 
-                     accessible style that engages readers while following tone guidelines precisely.''',
-        verbose=True,
-        allow_delegation=False
-    )
-
-def create_editor_agent():
-    """Editor agent that polishes and improves content"""
-    return Agent(
-        role='Content Editor',
-        goal='Review and improve content for clarity, grammar, flow, and engagement',
-        backstory='''You are a meticulous editor with an exceptional eye for detail. 
-                     You improve content by fixing grammar errors, enhancing clarity, 
-                     ensuring logical flow, and making writing more engaging. You cut 
-                     unnecessary words and expand where more explanation is needed. 
-                     You ensure consistency in tone and style throughout.''',
-        verbose=True,
-        allow_delegation=False
-    )
-
-def create_seo_agent():
-    """Agent that optimizes content for SEO"""
-    return Agent(
-        role='SEO Specialist',
-        goal='Optimize content for search engines while maintaining quality and readability',
-        backstory='''You are an SEO expert who understands both technical optimization 
-                     and user experience. You know how to improve search rankings without 
-                     sacrificing content quality. You provide clear, actionable recommendations 
-                     for content optimization.''',
-        verbose=True,
-        allow_delegation=False
-    )
+# Create global instance
+content_agents = ContentAgents()
