@@ -1,7 +1,7 @@
 """
 Content Creation Tasks
 Defines tasks for the content creation workflow
-Updated with proper context passing
+Updated with mandatory conclusions and proper agent assignment
 """
 
 from crewai import Task
@@ -67,13 +67,18 @@ class ContentTasks:
                 f"write a {content_type} of approximately {word_count} words.\n\n"
                 "You have access to all the research findings from the previous task. "
                 "Use this information to create compelling, accurate content.\n\n"
-                "Your content should:\n"
+                "Your content MUST include:\n"
                 "1. Have a compelling headline/title\n"
                 "2. Start with an engaging introduction that hooks the reader\n"
                 "3. Present information in a logical, easy-to-follow structure\n"
                 "4. Use clear, accessible language appropriate for the audience\n"
                 "5. Include relevant examples and explanations from the research\n"
-                "6. End with a strong conclusion and call-to-action\n\n"
+                "6. **MANDATORY: End with a strong conclusion and call-to-action**\n\n"
+                "The conclusion MUST:\n"
+                "- Summarize key points (2-3 sentences)\n"
+                "- Provide actionable takeaways\n"
+                "- Include a clear call-to-action\n"
+                "- Be at least 100 words long\n\n"
                 "Writing guidelines:\n"
                 "- Write in an engaging, conversational style\n"
                 "- Use short paragraphs (3-4 sentences max)\n"
@@ -91,11 +96,11 @@ class ContentTasks:
                 "- Engaging introduction (150-200 words)\n"
                 "- Body content with 3-5 clear subheadings\n"
                 "- Relevant examples and explanations based on research\n"
-                "- Strong conclusion with call-to-action\n"
+                "- **MANDATORY: Strong conclusion with call-to-action (100+ words)**\n"
                 "- Proper formatting with paragraphs, lists, etc.\n"
                 f"- Word count close to {word_count} words"
             ),
-            context=[research_context]  # Pass research findings to writer
+            context=[research_context]
         )
     
     def editing_task(self, agent, writing_context) -> Task:
@@ -118,7 +123,8 @@ class ContentTasks:
                 "5. Ensuring consistent tone and voice throughout\n"
                 "6. Removing redundancy and wordiness\n"
                 "7. Verifying factual accuracy\n"
-                "8. Improving headlines and subheadings\n\n"
+                "8. Improving headlines and subheadings\n"
+                "9. **ENSURING the conclusion is strong and complete**\n\n"
                 "Editing guidelines:\n"
                 "- Maintain the author's voice while improving clarity\n"
                 "- Ensure paragraphs flow logically\n"
@@ -139,9 +145,10 @@ class ContentTasks:
                 "- Strong, logical flow from start to finish\n"
                 "- Enhanced headlines and subheadings\n"
                 "- Refined language and sentence structure\n"
+                "- Strong conclusion with call-to-action\n"
                 "- Editor's notes on major improvements made"
             ),
-            context=[writing_context]  # Pass draft to editor
+            context=[writing_context]
         )
     
     def seo_optimization_task(self, agent, editing_context, 
@@ -198,7 +205,7 @@ class ContentTasks:
                 "- Image alt text suggestions\n"
                 "- Schema markup recommendations"
             ),
-            context=[editing_context]  # Pass edited content to SEO agent
+            context=[editing_context]
         )
     
     def complete_content_task(self, agent, topic: str, audience: str = "general",
@@ -235,7 +242,8 @@ class ContentTasks:
                 "- Quality standards are maintained throughout\n"
                 "- The final output meets all requirements\n"
                 "- Feedback loops exist for improvement\n"
-                "- Timeline and objectives are met"
+                "- Timeline and objectives are met\n"
+                "- Content includes a strong conclusion with call-to-action"
             ),
             agent=agent,
             expected_output=(

@@ -1,6 +1,9 @@
 """
 Content Creation System - Complete with Feedback Loop
 """
+import warnings
+warnings.filterwarnings("ignore", category=FutureWarning)
+warnings.filterwarnings("ignore", message=".*Python version.*")
 
 import sys
 import os
@@ -32,12 +35,12 @@ console = Console()
 
 
 def generate_single_attempt(config, attempt_num):
-    """Single generation attempt"""
+    """Single generation attempt with clean output"""
     
     tracker = ContentProgressTracker()
     tracker.start_tracking()
     
-    console.print("[dim]Initializing agents...[/dim]")
+    console.print("\n[dim]Initializing agents...[/dim]")
     research_agent = content_agents.research_agent([research_tool])
     writer_agent = content_agents.writer_agent([tone_analyzer])
     editor_agent = content_agents.editor_agent([tone_analyzer])
@@ -71,37 +74,29 @@ def generate_single_attempt(config, attempt_num):
         agents=[research_agent, writer_agent, editor_agent, seo_agent],
         tasks=[research_task, writing_task, editing_task, seo_task],
         process=Process.sequential,
-        verbose=False
+        verbose=False  # KEY: No verbose output from CrewAI
     )
     
     try:
-        console.print(f"[cyan]⏳ Generating (Attempt {attempt_num})...[/cyan]\n")
+        console.print(f"[cyan]⏳ Generating (Attempt {attempt_num})...[/cyan]")
+        console.print("[dim]This takes approximately 90 seconds[/dim]\n")
         
-        with Live(tracker.get_progress_table(), refresh_per_second=2, console=console) as live:
-            tracker.start_stage('research')
-            live.update(tracker.get_progress_table())
-            
-            result = crew.kickoff()
-            
-            tracker.complete_stage('research')
-            tracker.start_stage('writing')
-            live.update(tracker.get_progress_table())
-            time.sleep(0.3)
-            
-            tracker.complete_stage('writing')
-            tracker.start_stage('editing')
-            live.update(tracker.get_progress_table())
-            time.sleep(0.3)
-            
-            tracker.complete_stage('editing')
-            tracker.start_stage('seo')
-            live.update(tracker.get_progress_table())
-            time.sleep(0.3)
-            
-            tracker.complete_stage('seo')
-            live.update(tracker.get_progress_table())
+        # Mark stages as they happen (simple prints, no live tables)
+        tracker.start_stage('research')
         
+        # Execute crew
+        result = crew.kickoff()
+        
+        # Mark all stages complete (crew runs them sequentially)
+        tracker.complete_stage('research')
+        tracker.complete_stage('writing')
+        tracker.complete_stage('editing')
+        tracker.complete_stage('seo')
+        
+        # Show ONE summary table at the end
+        console.print("\n")
         console.print(tracker.get_completion_summary())
+        console.print("\n")
         
         final_content = f"# {config['title']}\n\n{result}"
         shared_memory.add_content_version(f'attempt_{attempt_num}', final_content)
@@ -109,10 +104,9 @@ def generate_single_attempt(config, attempt_num):
         return final_content
         
     except Exception as e:
-        console.print(f"\n[red]❌ Failed: {str(e)[:100]}[/red]\n")
+        console.print(f"\n[red]✗ Failed: {str(e)[:100]}[/red]\n")
         shared_memory.log_error('generation_failure', str(e), f'Attempt {attempt_num} failed')
         return None
-
 
 def create_content_with_config(config: dict):
     """Generate content with feedback loop"""
@@ -204,7 +198,7 @@ def create_content_with_config(config: dict):
         return None
     
     # Save
-    output_dir = Path("output")
+    output_dir = Path("outputs")
     output_dir.mkdir(exist_ok=True)
     
     safe_filename = re.sub(r'[^\w\s-]', '', config['topic']).strip().replace(' ', '_')[:50]

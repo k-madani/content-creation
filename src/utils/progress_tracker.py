@@ -1,113 +1,76 @@
 """
-Real-Time Progress Tracking System
-Shows agent execution progress with time estimates
+Simple Progress Tracker - No Overlapping Boxes
 """
 
-from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TimeElapsedColumn
 from rich.console import Console
-from rich.live import Live
 from rich.table import Table
 import time
-from datetime import datetime
 
 console = Console()
 
 
 class ContentProgressTracker:
-    """Track and display content generation progress"""
+    """Simple progress tracker without live updates"""
     
     def __init__(self):
         self.stages = {
-            'research': {'name': '🔍 Research', 'status': 'pending', 'time': 0},
-            'writing': {'name': '✍️ Writing', 'status': 'pending', 'time': 0},
-            'editing': {'name': '📝 Editing', 'status': 'pending', 'time': 0},
-            'seo': {'name': '🎯 SEO', 'status': 'pending', 'time': 0}
+            'research': {'status': 'pending', 'time': 0, 'icon': '🔍'},
+            'writing': {'status': 'pending', 'time': 0, 'icon': '✍️'},
+            'editing': {'status': 'pending', 'time': 0, 'icon': '📝'},
+            'seo': {'status': 'pending', 'time': 0, 'icon': '🎯'}
         }
+        self.start_time = None
         self.current_stage = None
-        self.stage_start_time = None
-        self.total_start_time = None
+        self.stage_start = None
     
     def start_tracking(self):
-        """Start tracking overall progress"""
-        self.total_start_time = time.time()
+        """Start overall tracking"""
+        self.start_time = time.time()
     
-    def start_stage(self, stage_key):
-        """Mark stage as started"""
-        self.current_stage = stage_key
-        self.stage_start_time = time.time()
-        self.stages[stage_key]['status'] = 'running'
+    def start_stage(self, stage_name):
+        """Start a stage - just print, don't update table"""
+        self.current_stage = stage_name
+        self.stage_start = time.time()
+        self.stages[stage_name]['status'] = 'working'
+        
+        # Simple print instead of table update
+        icon = self.stages[stage_name]['icon']
+        console.print(f"\n[yellow]{icon} {stage_name.title()} phase starting...[/yellow]")
     
-    def complete_stage(self, stage_key):
-        """Mark stage as completed"""
-        if self.stage_start_time:
-            elapsed = time.time() - self.stage_start_time
-            self.stages[stage_key]['time'] = elapsed
-            self.stages[stage_key]['status'] = 'completed'
-    
-    def get_progress_table(self):
-        """Generate progress table"""
+    def complete_stage(self, stage_name):
+        """Complete a stage"""
+        if self.stage_start:
+            elapsed = time.time() - self.stage_start
+            self.stages[stage_name]['time'] = elapsed
         
-        table = Table(title="[bold cyan]Content Generation Progress[/bold cyan]", show_header=True)
-        table.add_column("Stage", style="cyan", width=15)
-        table.add_column("Status", width=12)
-        table.add_column("Time", justify="right", width=10)
+        self.stages[stage_name]['status'] = 'done'
         
-        for stage_key, stage_data in self.stages.items():
-            # Status emoji
-            if stage_data['status'] == 'completed':
-                status = "[green]✅ Done[/green]"
-                time_str = f"{stage_data['time']:.1f}s"
-            elif stage_data['status'] == 'running':
-                status = "[yellow]⏳ Working...[/yellow]"
-                time_str = f"{time.time() - self.stage_start_time:.1f}s" if self.stage_start_time else "-"
-            else:
-                status = "[dim]⏸️  Pending[/dim]"
-                time_str = "-"
-            
-            table.add_row(stage_data['name'], status, time_str)
-        
-        # Add total time
-        if self.total_start_time:
-            total_elapsed = time.time() - self.total_start_time
-            table.add_row(
-                "[bold]Total[/bold]",
-                "",
-                f"[bold]{total_elapsed:.1f}s[/bold]"
-            )
-        
-        return table
+        # Simple completion message
+        icon = self.stages[stage_name]['icon']
+        elapsed_str = f"{self.stages[stage_name]['time']:.1f}s"
+        console.print(f"[green]✓ {stage_name.title()} complete ({elapsed_str})[/green]")
     
     def get_completion_summary(self):
-        """Get final summary after completion"""
+        """Get final summary - ONE table at the end"""
+        total_time = time.time() - self.start_time if self.start_time else 0
         
-        total_time = time.time() - self.total_start_time if self.total_start_time else 0
+        table = Table(title="[cyan]Generation Complete[/cyan]", show_header=True)
+        table.add_column("Stage", style="cyan")
+        table.add_column("Status", style="green")
+        table.add_column("Time", style="yellow")
         
-        summary = f"""
-[bold green]✅ GENERATION COMPLETE![/bold green]
-
-[cyan]⏱️  Performance Summary:[/cyan]
-"""
+        for stage_name, data in self.stages.items():
+            icon = data['icon']
+            status = "✓ Done" if data['status'] == 'done' else "Pending"
+            time_str = f"{data['time']:.1f}s" if data['time'] > 0 else "-"
+            
+            table.add_row(
+                f"{icon} {stage_name.title()}",
+                status,
+                time_str
+            )
         
-        for stage_key, stage_data in self.stages.items():
-            if stage_data['status'] == 'completed':
-                summary += f"  {stage_data['name']}: {stage_data['time']:.1f}s\n"
+        table.add_row("", "", "", style="dim")
+        table.add_row("[bold]Total[/bold]", "", f"[bold]{total_time:.1f}s[/bold]")
         
-        summary += f"  [bold]━━━━━━━━━━━━━━━━━━━[/bold]\n"
-        summary += f"  [bold]Total Time: {total_time:.1f}s ({total_time/60:.1f} min)[/bold]\n"
-        
-        return summary
-
-
-def create_progress_display():
-    """Create a live progress display"""
-    
-    progress = Progress(
-        SpinnerColumn(),
-        TextColumn("[progress.description]{task.description}"),
-        BarColumn(),
-        TextColumn("[progress.percentage]{task.percentage:>3.0f}%"),
-        TimeElapsedColumn(),
-        console=console
-    )
-    
-    return progress
+        return table

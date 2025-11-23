@@ -24,7 +24,6 @@ Thumbs.db
 
 # Project specific
 outputs/
-output/
 memory/
 logs/
 *.log
