@@ -1,53 +1,63 @@
 """
-Free Research Tool - Replaces Serper
-Uses Wikipedia + DuckDuckGo Search
-Updated for CrewAI 1.5.0+
+Free Research Tool - Complete with Error Handling
+Wikipedia + DuckDuckGo with fallback strategies
 """
 
 from crewai.tools import tool
 import wikipedia
 from duckduckgo_search import DDGS
-import requests
-from bs4 import BeautifulSoup
+import time
 
 
 @tool("Free Research Tool")
 def research_tool(query: str, max_results: int = 5) -> str:
     """
-    Searches Wikipedia and DuckDuckGo for comprehensive research.
-    Use this for gathering information, facts, and recent developments on any topic.
-    Returns structured summaries from multiple sources.
-    
-    Args:
-        query: Search query for research
-        max_results: Maximum number of results (default: 5)
-        
-    Returns:
-        Formatted research results from multiple sources
+    Searches Wikipedia and DuckDuckGo with comprehensive error handling
     """
     results = []
+    errors = []
     
-    # 1. Search Wikipedia
+    # Try Wikipedia
     try:
         wiki_results = _search_wikipedia(query)
         if wiki_results:
             results.append(wiki_results)
     except Exception as e:
-        print(f"Wikipedia search failed: {e}")
+        errors.append(('Wikipedia', str(e)[:50]))
     
-    # 2. Search DuckDuckGo
+    # Try DuckDuckGo with retry
     try:
-        ddg_results = _search_duckduckgo(query, max_results)
+        ddg_results = _search_duckduckgo_with_retry(query, max_results)
         if ddg_results:
             results.extend(ddg_results)
     except Exception as e:
-        print(f"DuckDuckGo search failed: {e}")
+        errors.append(('DuckDuckGo', str(e)[:50]))
+    
+    # FALLBACK: Try simplified query if no results
+    if not results and len(query.split()) > 3:
+        simplified = ' '.join(query.split()[:3])
+        try:
+            ddg_results = _search_duckduckgo_with_retry(simplified, max_results)
+            if ddg_results:
+                results.extend(ddg_results)
+        except:
+            pass
+    
+    # FINAL FALLBACK: Partial information
+    if not results:
+        error_list = '\n'.join([f'- {src}: {err}' for src, err in errors])
+        return (
+            f"# Research Results for: {query}\n\n"
+            f"⚠️ **Limited results found**\n\n"
+            f"Search attempts:\n"
+            f"{error_list}\n\n"
+            f"💡 Content can still be generated using general knowledge.\n"
+        )
     
     # Format results
-    if not results:
-        return f"No results found for query: {query}"
-    
     formatted = f"# Research Results for: {query}\n\n"
+    formatted += f"✅ Found {len(results)} source(s)\n\n"
+    
     for i, result in enumerate(results[:max_results], 1):
         formatted += f"## Result {i}: {result['title']}\n"
         formatted += f"**Source:** {result['source']}\n"
@@ -60,11 +70,10 @@ def research_tool(query: str, max_results: int = 5) -> str:
 
 
 def _search_wikipedia(query: str):
-    """Search Wikipedia for information"""
+    """Search Wikipedia with error handling"""
     try:
         summary = wikipedia.summary(query, sentences=5, auto_suggest=True)
         page = wikipedia.page(query, auto_suggest=True)
-        
         return {
             "title": page.title,
             "source": "Wikipedia",
@@ -86,22 +95,29 @@ def _search_wikipedia(query: str):
         return None
 
 
-def _search_duckduckgo(query: str, max_results: int):
-    """Search DuckDuckGo for web results"""
-    try:
-        ddgs = DDGS()
-        search_results = list(ddgs.text(query, max_results=max_results))
-        
-        formatted_results = []
-        for result in search_results:
-            formatted_results.append({
-                "title": result.get('title', 'No Title'),
-                "source": "DuckDuckGo",
-                "content": result.get('body', 'No summary available'),
-                "url": result.get('href', '')
-            })
-        
-        return formatted_results
-    except Exception as e:
-        print(f"DuckDuckGo search error: {e}")
-        return []
+def _search_duckduckgo_with_retry(query: str, max_results: int):
+    """Search DuckDuckGo with retry logic"""
+    
+    for attempt in range(3):
+        try:
+            ddgs = DDGS()
+            search_results = list(ddgs.text(query, max_results=max_results))
+            
+            formatted_results = []
+            for result in search_results:
+                formatted_results.append({
+                    "title": result.get('title', 'No Title'),
+                    "source": "DuckDuckGo",
+                    "content": result.get('body', 'No summary'),
+                    "url": result.get('href', '')
+                })
+            
+            return formatted_results
+            
+        except Exception as e:
+            if attempt < 2:
+                time.sleep(1)
+                continue
+            return []
+    
+    return []
