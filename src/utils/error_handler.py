@@ -1,23 +1,30 @@
+"""
+Error Handler Utilities
+Provides decorators for retry logic, error handling, and performance logging
+"""
+
 import logging
 import time
 from functools import wraps
 from typing import Callable, Any
 import os
+from pathlib import Path
 
 # Create logs directory
-os.makedirs('logs', exist_ok=True)
+logs_dir = Path("logs")
+logs_dir.mkdir(exist_ok=True)
 
 # Setup logging
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     handlers=[
-        logging.FileHandler('logs/contentcraft.log'),
+        logging.FileHandler(logs_dir / 'content_creation.log'),
         logging.StreamHandler()
     ]
 )
 
-logger = logging.getLogger('ContentCraft')
+logger = logging.getLogger('ContentCreation')
 
 
 def retry_with_backoff(max_retries: int = 3, base_delay: float = 1.0):
@@ -96,3 +103,33 @@ def log_performance(func: Callable) -> Callable:
             raise
     
     return wrapper
+
+
+def log_agent_execution(agent_name: str):
+    """
+    Decorator specifically for logging agent executions
+    
+    Args:
+        agent_name: Name of the agent being executed
+    """
+    def decorator(func: Callable) -> Callable:
+        @wraps(func)
+        def wrapper(*args, **kwargs) -> Any:
+            logger.info(f"{'='*60}")
+            logger.info(f"AGENT: {agent_name}")
+            logger.info(f"{'='*60}")
+            
+            start_time = time.time()
+            
+            try:
+                result = func(*args, **kwargs)
+                duration = time.time() - start_time
+                logger.info(f"✅ {agent_name} completed successfully in {duration:.2f}s")
+                return result
+            except Exception as e:
+                duration = time.time() - start_time
+                logger.error(f"❌ {agent_name} failed after {duration:.2f}s: {str(e)}")
+                raise
+        
+        return wrapper
+    return decorator
