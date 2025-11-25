@@ -1,35 +1,29 @@
-import { useState } from 'react'
-import reactLogo from './assets/react.svg'
-import viteLogo from '/vite.svg'
-import './App.css'
+import React, { useState } from 'react';
+import { ThemeProvider } from './context/ThemeContext';
+import Dashboard from './pages/Dashboard';
+import ConfigPage from './pages/ConfigPage';
+import PipelinePage from './pages/PipelinePage';
+import ResultsPage from './pages/ResultsPage';
 
-function App() {
-  const [count, setCount] = useState(0)
+export default function App() {
+  const [currentScreen, setCurrentScreen] = useState('dashboard');
+  const [jobId, setJobId] = useState(null);
+  const [jobResult, setJobResult] = useState(null);
+
+  const navigateTo = (screen, data = {}) => {
+    setCurrentScreen(screen);
+    if (data.jobId) setJobId(data.jobId);
+    if (data.result) setJobResult(data.result);
+  };
 
   return (
-    <>
-      <div>
-        <a href="https://vite.dev" target="_blank">
-          <img src={viteLogo} className="logo" alt="Vite logo" />
-        </a>
-        <a href="https://react.dev" target="_blank">
-          <img src={reactLogo} className="logo react" alt="React logo" />
-        </a>
+    <ThemeProvider>
+      <div className="min-h-screen bg-white dark:bg-slate-950">
+        {currentScreen === 'dashboard' && <Dashboard onNavigate={navigateTo} />}
+        {currentScreen === 'config' && <ConfigPage onNavigate={navigateTo} />}
+        {currentScreen === 'pipeline' && <PipelinePage jobId={jobId} onNavigate={navigateTo} />}
+        {currentScreen === 'results' && <ResultsPage result={jobResult} onNavigate={navigateTo} />}
       </div>
-      <h1>Vite + React</h1>
-      <div className="card">
-        <button onClick={() => setCount((count) => count + 1)}>
-          count is {count}
-        </button>
-        <p>
-          Edit <code>src/App.jsx</code> and save to test HMR
-        </p>
-      </div>
-      <p className="read-the-docs">
-        Click on the Vite and React logos to learn more
-      </p>
-    </>
-  )
+    </ThemeProvider>
+  );
 }
-
-export default App
