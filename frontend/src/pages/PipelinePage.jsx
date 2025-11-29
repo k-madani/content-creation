@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import AgentCard from '../components/AgentCard';
 import ProgressBar from '../components/ProgressBar';
-import { AGENT_DURATIONS } from '../utils/constants';
+import { API_URL, WS_URL, AGENT_DURATIONS } from '../utils/constants';
 
 export default function PipelinePage({ jobId, onNavigate }) {
   const [agents, setAgents] = useState([
@@ -13,113 +13,184 @@ export default function PipelinePage({ jobId, onNavigate }) {
   
   const [totalProgress, setTotalProgress] = useState(0);
   const [logs, setLogs] = useState([]);
+  const [connectionStatus, setConnectionStatus] = useState('connecting');
   const startTime = useRef(Date.now());
+  const wsRef = useRef(null);
+  const pollIntervalRef = useRef(null);
 
   useEffect(() => {
-    const durations = [
-      AGENT_DURATIONS.research,
-      AGENT_DURATIONS.writer,
-      AGENT_DURATIONS.editor,
-      AGENT_DURATIONS.seo
-    ];
+    if (!jobId) return;
+
+    console.log(`📡 Connecting to job ${jobId}`);
     
-    const runAgents = async () => {
-      for (let i = 0; i < agents.length; i++) {
-        setAgents(prev => prev.map((a, idx) => 
-          idx === i ? { ...a, status: 'active', progress: 0 } : a
-        ));
-        addLog(`${agents[i].name} started`);
-
-        for (let p = 0; p <= 100; p += 10) {
-          await new Promise(resolve => setTimeout(resolve, durations[i] * 10));
-          setAgents(prev => prev.map((a, idx) =>
-            idx === i ? { ...a, progress: p } : a
-          ));
-          setTotalProgress(Math.floor((i * 100 + p) / 4));
-        }
-
-        setAgents(prev => prev.map((a, idx) =>
-          idx === i ? { ...a, status: 'complete', progress: 100, time: durations[i] } : a
-        ));
-        addLog(`${agents[i].name} completed in ${durations[i]}s`);
+    // Try WebSocket connection
+    connectWebSocket();
+    
+    // Also poll for status as backup
+    startPolling();
+    
+    return () => {
+      if (wsRef.current) {
+        wsRef.current.close();
       }
-
-      setTimeout(() => {
-        const mockResult = {
-          content: `# The Future of Remote Work in Tech
-
-## Introduction
-
-In today's rapidly evolving landscape, understanding the future of remote work in tech has become increasingly important. This comprehensive guide explores the key aspects, challenges, and opportunities that define this subject.
-
-## Key Points
-
-The fundamental principles can be broken down into several critical components. Each plays a vital role in shaping our understanding and approach to remote work.
-
-### Flexibility and Work-Life Balance
-
-Remote work offers unprecedented flexibility, allowing professionals to design their ideal work environment and schedule.
-
-### Technology Infrastructure
-
-The backbone of remote work relies on robust communication tools, cloud infrastructure, and cybersecurity measures.
-
-### Team Collaboration
-
-New paradigms for collaboration have emerged, leveraging video conferencing, project management tools, and asynchronous communication.
-
-## Conclusion
-
-As we've explored, the future of remote work in tech represents a dynamic and multifaceted subject with exciting possibilities on the horizon.`,
-          metadata: {
-            word_count: 1523,
-            read_time: '7 min read',
-            quality_score: 85,
-            readability_score: 67,
-            seo_score: 82,
-            meta_title: 'The Future of Remote Work in Tech',
-            meta_description: 'Exploring the evolution of remote work in the technology sector and its impact on productivity.',
-            url_slug: 'future-remote-work-tech',
-            title_variations: [
-              'The Future of Remote Work in Tech',
-              'How Remote Work Will Transform Tech Industries',
-              'Remote Work in Tech: A Complete 2024 Guide',
-              '7 Ways Remote Work is Changing Tech Forever',
-              'The Ultimate Guide to Remote Tech Work'
-            ]
-          },
-          performance: {
-            total_time: 87.3,
-            agent_times: {
-              research: 12.4,
-              writer: 45.2,
-              editor: 18.7,
-              seo: 11.0
-            },
-            token_usage: 4234,
-            api_calls: 4,
-            cost: 0.00
-          }
-        };
-        onNavigate('results', { result: mockResult });
-      }, 1000);
+      if (pollIntervalRef.current) {
+        clearInterval(pollIntervalRef.current);
+      }
     };
+  }, [jobId]);
 
-    runAgents();
-  }, []);
+  const connectWebSocket = () => {
+    try {
+      const ws = new WebSocket(`${WS_URL}/ws/${jobId}`);
+      wsRef.current = ws;
+
+      ws.onopen = () => {
+        console.log('✅ WebSocket connected');
+        setConnectionStatus('connected');
+        addLog('WebSocket connected');
+      };
+
+      ws.onmessage = (event) => {
+        const data = JSON.parse(event.data);
+        console.log('📨 WebSocket message:', data);
+        handleWebSocketMessage(data);
+      };
+
+      ws.onerror = (error) => {
+        console.error('❌ WebSocket error:', error);
+        setConnectionStatus('error');
+      };
+
+      ws.onclose = () => {
+        console.log('🔌 WebSocket closed');
+        setConnectionStatus('disconnected');
+      };
+    } catch (error) {
+      console.error('❌ WebSocket connection failed:', error);
+      setConnectionStatus('error');
+    }
+  };
+
+  const startPolling = () => {
+    // Poll job status every 2 seconds as backup
+    pollIntervalRef.current = setInterval(async () => {
+      try {
+        const response = await fetch(`${API_URL}/api/jobs/${jobId}`);
+        if (response.ok) {
+          const status = await response.json();
+          
+          if (status.status === 'completed') {
+            clearInterval(pollIntervalRef.current);
+            fetchResultAndNavigate();
+          } else if (status.status === 'failed') {
+            clearInterval(pollIntervalRef.current);
+            addLog(`Error: ${status.error || 'Generation failed'}`);
+          }
+        }
+      } catch (error) {
+        console.error('Polling error:', error);
+      }
+    }, 2000);
+  };
+
+  const fetchResultAndNavigate = async () => {
+    try {
+      addLog('Fetching results...');
+      const response = await fetch(`${API_URL}/api/jobs/${jobId}/result`);
+      
+      if (response.ok) {
+        const result = await response.json();
+        addLog('✓ Results received');
+        
+        // Navigate to results page
+        setTimeout(() => {
+          onNavigate('results', { result });
+        }, 1000);
+      }
+    } catch (error) {
+      console.error('Failed to fetch result:', error);
+      addLog(`Error: ${error.message}`);
+    }
+  };
+
+  const handleWebSocketMessage = (data) => {
+    switch (data.type) {
+      case 'connected':
+        addLog('Connected to generation service');
+        break;
+        
+      case 'agent_update':
+        updateAgent(data.agent, data.status, data.progress || 0, data.time || 0);
+        addLog(`${data.agent}: ${data.message || data.status}`);
+        break;
+        
+      case 'agent_progress':
+        updateAgentProgress(data.agent, data.progress);
+        if (data.total_progress) {
+          setTotalProgress(data.total_progress);
+        }
+        break;
+        
+      case 'complete':
+        addLog('✓ Generation complete!');
+        setTotalProgress(100);
+        markAllComplete();
+        
+        setTimeout(() => {
+          onNavigate('results', { result: data.result });
+        }, 1000);
+        break;
+        
+      case 'error':
+        addLog(`✗ Error: ${data.message}`);
+        break;
+        
+      default:
+        console.log('Unknown message type:', data.type);
+    }
+  };
+
+  const updateAgent = (agentName, status, progress, time) => {
+    setAgents(prev => prev.map(agent => 
+      agent.name === agentName 
+        ? { ...agent, status, progress: progress || agent.progress, time: time || agent.time }
+        : agent
+    ));
+  };
+
+  const updateAgentProgress = (agentName, progress) => {
+    setAgents(prev => prev.map(agent =>
+      agent.name === agentName
+        ? { ...agent, progress }
+        : agent
+    ));
+  };
+
+  const markAllComplete = () => {
+    setAgents(prev => prev.map(agent => ({
+      ...agent,
+      status: 'complete',
+      progress: 100
+    })));
+  };
 
   const addLog = (message) => {
     const timestamp = new Date().toLocaleTimeString();
-    setLogs(prev => [...prev, { time: timestamp, message }]);
+    setLogs(prev => [...prev, { time: timestamp, message }].slice(-20));
   };
 
-  const estimatedTime = Math.max(0, 90 - Math.floor((Date.now() - startTime.current) / 1000));
+  const estimatedTime = Math.max(0, 180 - Math.floor((Date.now() - startTime.current) / 1000));
 
   return (
     <div className="max-w-6xl mx-auto px-4 py-8">
       <div className="mb-6">
         <h2 className="text-2xl font-bold text-slate-900 dark:text-slate-100">Generation in Progress</h2>
         <p className="text-slate-600 dark:text-slate-400">Job #{jobId?.slice(0, 8)}</p>
+        {connectionStatus !== 'connected' && (
+          <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+            Status: {connectionStatus === 'connecting' ? 'Connecting...' : 'Polling for updates'}
+          </p>
+        )}
       </div>
 
       {/* Progress Bar */}
@@ -149,7 +220,7 @@ As we've explored, the future of remote work in tech represents a dynamic and mu
         </h3>
         <div className="space-y-2 font-mono text-xs h-64 overflow-y-auto">
           {logs.length === 0 ? (
-            <div className="text-slate-500">Initializing system...</div>
+            <div className="text-slate-500">Waiting for updates...</div>
           ) : (
             logs.map((log, i) => (
               <div key={i} className="flex gap-3">

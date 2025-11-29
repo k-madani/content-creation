@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { CONTENT_TYPES, TONES, AUDIENCES } from '../utils/constants';
-import { ArrowRight, ArrowLeft } from 'lucide-react';
+import { CONTENT_TYPES, TONES, AUDIENCES, API_URL } from '../utils/constants';
+import { ArrowRight, ArrowLeft, Loader2 } from 'lucide-react';
 
 export default function ConfigPage({ onNavigate }) {
   const [formData, setFormData] = useState({
@@ -12,18 +12,54 @@ export default function ConfigPage({ onNavigate }) {
     keywords: ''
   });
 
-  const handleSubmit = () => {
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState(null);
+
+  const handleSubmit = async () => {
     if (!formData.topic.trim()) {
-      alert('Please enter a topic');
+      setError('Please enter a topic');
       return;
     }
 
-    const mockJobId = 'demo-' + Date.now();
-    onNavigate('pipeline', { jobId: mockJobId });
+    setIsSubmitting(true);
+    setError(null);
+
+    try {
+      // Call real backend API
+      const response = await fetch(`${API_URL}/api/generate`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          topic: formData.topic,
+          word_count: formData.word_count,
+          content_type: formData.content_type,
+          audience: formData.audience,
+          tone: formData.tone,
+          keywords: formData.keywords.split(',').map(k => k.trim()).filter(Boolean)
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to create generation job');
+      }
+
+      const data = await response.json();
+      
+      // Navigate to pipeline page with real job ID
+      onNavigate('pipeline', { jobId: data.job_id });
+      
+    } catch (err) {
+      console.error('Generation error:', err);
+      setError(err.message || 'Failed to start generation');
+      setIsSubmitting(false);
+    }
   };
 
   const handleChange = (field, value) => {
     setFormData(prev => ({ ...prev, [field]: value }));
+    setError(null);
   };
 
   return (
@@ -40,6 +76,12 @@ export default function ConfigPage({ onNavigate }) {
         <h2 className="text-2xl font-bold text-slate-900 dark:text-slate-100 mb-2">Configure Your Content</h2>
         <p className="text-slate-600 dark:text-slate-400 mb-8">Specify your requirements and let AI agents handle the rest</p>
 
+        {error && (
+          <div className="mb-6 p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg text-red-700 dark:text-red-400">
+            {error}
+          </div>
+        )}
+
         <div className="space-y-6">
           {/* Topic Input */}
           <div>
@@ -51,7 +93,8 @@ export default function ConfigPage({ onNavigate }) {
               value={formData.topic}
               onChange={(e) => handleChange('topic', e.target.value)}
               placeholder="e.g., The Future of Remote Work in Tech"
-              className="w-full px-4 py-3 border-2 border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-900 rounded-xl focus:border-primary-500 dark:focus:border-primary-400 focus:ring-2 focus:ring-primary-200 dark:focus:ring-primary-900/30 outline-none transition text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500"
+              disabled={isSubmitting}
+              className="w-full px-4 py-3 border-2 border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-900 rounded-xl focus:border-primary-500 dark:focus:border-primary-400 focus:ring-2 focus:ring-primary-200 dark:focus:ring-primary-900/30 outline-none transition text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 disabled:opacity-50"
             />
           </div>
 
@@ -64,7 +107,8 @@ export default function ConfigPage({ onNavigate }) {
               <select
                 value={formData.content_type}
                 onChange={(e) => handleChange('content_type', e.target.value)}
-                className="w-full px-4 py-3 border-2 border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-900 rounded-xl focus:border-primary-500 dark:focus:border-primary-400 outline-none transition text-slate-900 dark:text-slate-100"
+                disabled={isSubmitting}
+                className="w-full px-4 py-3 border-2 border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-900 rounded-xl focus:border-primary-500 dark:focus:border-primary-400 outline-none transition text-slate-900 dark:text-slate-100 disabled:opacity-50"
               >
                 {CONTENT_TYPES.map(type => (
                   <option key={type} value={type}>{type}</option>
@@ -79,7 +123,8 @@ export default function ConfigPage({ onNavigate }) {
               <select
                 value={formData.tone}
                 onChange={(e) => handleChange('tone', e.target.value)}
-                className="w-full px-4 py-3 border-2 border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-900 rounded-xl focus:border-primary-500 dark:focus:border-primary-400 outline-none transition text-slate-900 dark:text-slate-100"
+                disabled={isSubmitting}
+                className="w-full px-4 py-3 border-2 border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-900 rounded-xl focus:border-primary-500 dark:focus:border-primary-400 outline-none transition text-slate-900 dark:text-slate-100 disabled:opacity-50"
               >
                 {TONES.map(tone => (
                   <option key={tone} value={tone}>{tone}</option>
@@ -96,7 +141,8 @@ export default function ConfigPage({ onNavigate }) {
             <select
               value={formData.audience}
               onChange={(e) => handleChange('audience', e.target.value)}
-              className="w-full px-4 py-3 border-2 border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-900 rounded-xl focus:border-primary-500 dark:focus:border-primary-400 outline-none transition text-slate-900 dark:text-slate-100"
+              disabled={isSubmitting}
+              className="w-full px-4 py-3 border-2 border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-900 rounded-xl focus:border-primary-500 dark:focus:border-primary-400 outline-none transition text-slate-900 dark:text-slate-100 disabled:opacity-50"
             >
               {AUDIENCES.map(aud => (
                 <option key={aud} value={aud}>{aud}</option>
@@ -116,7 +162,8 @@ export default function ConfigPage({ onNavigate }) {
               step="100"
               value={formData.word_count}
               onChange={(e) => handleChange('word_count', parseInt(e.target.value))}
-              className="w-full h-2 bg-slate-200 dark:bg-slate-700 rounded-lg appearance-none cursor-pointer accent-primary-600 dark:accent-primary-500"
+              disabled={isSubmitting}
+              className="w-full h-2 bg-slate-200 dark:bg-slate-700 rounded-lg appearance-none cursor-pointer accent-primary-600 dark:accent-primary-500 disabled:opacity-50"
             />
             <div className="flex justify-between text-xs text-slate-500 dark:text-slate-400 mt-2">
               <span>Quick Read (500)</span>
@@ -135,7 +182,8 @@ export default function ConfigPage({ onNavigate }) {
               value={formData.keywords}
               onChange={(e) => handleChange('keywords', e.target.value)}
               placeholder="keyword1, keyword2, keyword3"
-              className="w-full px-4 py-3 border-2 border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-900 rounded-xl focus:border-primary-500 dark:focus:border-primary-400 outline-none transition text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500"
+              disabled={isSubmitting}
+              className="w-full px-4 py-3 border-2 border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-900 rounded-xl focus:border-primary-500 dark:focus:border-primary-400 outline-none transition text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 disabled:opacity-50"
             />
             <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Separate keywords with commas</p>
           </div>
@@ -150,11 +198,20 @@ export default function ConfigPage({ onNavigate }) {
           {/* Submit Button */}
           <button
             onClick={handleSubmit}
-            disabled={!formData.topic.trim()}
+            disabled={!formData.topic.trim() || isSubmitting}
             className="w-full py-4 bg-primary-600 dark:bg-primary-500 text-white rounded-xl font-semibold text-lg hover:bg-primary-700 dark:hover:bg-primary-600 transition disabled:opacity-50 disabled:cursor-not-allowed shadow-lg hover:shadow-xl flex items-center justify-center gap-2 group"
           >
-            Start Generation
-            <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+            {isSubmitting ? (
+              <>
+                <Loader2 className="w-5 h-5 animate-spin" />
+                Starting Generation...
+              </>
+            ) : (
+              <>
+                Start Generation
+                <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+              </>
+            )}
           </button>
         </div>
       </div>
