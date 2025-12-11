@@ -1,20 +1,20 @@
 # Python
-__pycache__/*
+__pycache__/
 *.py[cod]
 *$py.class
 *.so
 .Python
-venv/*
-env/*
-*.egg-info/*
+venv/
+env/
+*.egg-info/
 
 # Environment variables (NEVER commit API keys!)
 .env
 .env.local
 
 # IDE
-.vscode/*
-.idea/*
+.vscode/
+.idea/
 *.swp
 *.swo
 
@@ -23,14 +23,11 @@ env/*
 Thumbs.db
 
 # Project specific
-outputs/*
-memory/*
-logs/*
+outputs/
+memory/
+logs/
 *.log
 
 # Test coverage
 .coverage
-htmlcov/*
-
-# frontend
-node_modules/*
+htmlcov/
