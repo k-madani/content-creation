@@ -7,9 +7,11 @@ from crewai import Agent
 import os
 from dotenv import load_dotenv
 from rich.console import Console
+from utils.llm_manager import get_llm_manager
 
 load_dotenv()
 console = Console()
+llm_manager = get_llm_manager()
 
 
 class LLMHealthChecker:
@@ -103,10 +105,11 @@ class ContentAgents:
     def research_agent(self, tools: list) -> Agent:
         """
         Research Agent with RAG + Web Search fallback
-        
-        Enhanced with vector database retrieval for high-quality,
-        curated information before falling back to web search
+        Uses Groq for iteration-heavy research tasks
         """
+        # Use Groq for research (many iterations expected)
+        research_llm = llm_manager.get_llm_string(prefer_groq=True)
+        
         return Agent(
             role="RAG-Enhanced Content Research Specialist",
             goal=(
@@ -135,14 +138,16 @@ class ContentAgents:
                 "comprehensive, well-organized, and ready for the writer to use."
             ),
             tools=tools,
-            llm=self.llm,
+            llm=research_llm,  # Use Groq for research
             verbose=True,
             allow_delegation=False,
-            max_iter=5
+            max_iter=3  # Reduced from 5
         )
     
     def writer_agent(self, tools: list) -> Agent:
-        """Writer Agent"""
+        """Writer Agent - Uses Gemini for quality"""
+        writer_llm = llm_manager.get_llm_string(prefer_groq=False)
+        
         return Agent(
             role="Content Writer",
             goal=(
@@ -156,34 +161,39 @@ class ContentAgents:
                 "You adapt your writing to available information."
             ),
             tools=tools,
-            llm=self.llm,
+            llm=writer_llm,  # Use Gemini for writing quality
             verbose=True,
             allow_delegation=False,
-            max_iter=5
+            max_iter=3  # Reduced from 5
         )
     
     def editor_agent(self, tools: list) -> Agent:
-        """Editor Agent"""
+        """Editor Agent - Uses Groq for speed"""
+        editor_llm = llm_manager.get_llm_string(prefer_groq=True)
+    
         return Agent(
             role="Content Editor",
             goal=(
-                "Refine content to highest quality. "
-                "Improve readability, flow, and consistency. "
-                "Always improve - never refuse to edit."
+                "Review and polish the draft content. "
+                "CRITICAL: You MUST return the complete edited content, "
+                "not just notes about what you changed. "
+                "Output the full article text."
             ),
             backstory=(
                 "You are an expert editor who enhances any content. "
                 "You improve clarity, structure, and engagement."
             ),
             tools=tools,
-            llm=self.llm,
+            llm=editor_llm,  # Use Groq for editing
             verbose=True,
             allow_delegation=False,
-            max_iter=5
+            max_iter=2  # Reduced from 5
         )
     
     def seo_agent(self, tools: list) -> Agent:
-        """SEO Agent"""
+        """SEO Agent - Uses Gemini for analysis"""
+        seo_llm = llm_manager.get_llm_string(prefer_groq=False)
+        
         return Agent(
             role="SEO Specialist",
             goal=(
@@ -196,10 +206,10 @@ class ContentAgents:
                 "You optimize any content for better search rankings."
             ),
             tools=tools,
-            llm=self.llm,
+            llm=seo_llm,  # Use Gemini for SEO
             verbose=True,
             allow_delegation=False,
-            max_iter=5
+            max_iter=2  # Reduced from 5
         )
     
     def controller_agent(self) -> Agent:

@@ -30,6 +30,8 @@ from utils.progress_tracker import ContentProgressTracker
 from utils.quality_scorer import quality_scorer
 from utils.shared_memory import shared_memory
 from utils.feedback_loop import feedback_loop
+from utils.llm_manager import get_llm_manager
+from utils.query_router import get_query_router
 
 load_dotenv()
 console = Console()
@@ -112,7 +114,17 @@ def generate_single_attempt(config, attempt_num):
         return final_content
         
     except Exception as e:
-        console.print(f"\n[red]✗ Failed: {str(e)[:100]}[/red]\n")
+        error_str = str(e)
+        console.print(f"\n[red]✗ Failed: {error_str[:100]}[/red]\n")
+        
+        # Check if rate limit error
+        llm_manager = get_llm_manager()
+        is_rate_limit = '429' in error_str or 'rate limit' in error_str.lower()
+        
+        if is_rate_limit:
+            console.print("[yellow]⚠️ Rate limit detected[/yellow]")
+            llm_manager.handle_failure('Gemini', e)
+        
         shared_memory.log_error('generation_failure', str(e), f'Attempt {attempt_num} failed')
         return None
 
@@ -240,6 +252,14 @@ def create_content_with_config(config: dict):
     
     # Memory summary
     shared_memory.display_summary()
+    
+    # LLM Manager statistics
+    llm_manager = get_llm_manager()
+    llm_manager.display_statistics()
+    
+    # Query Router statistics  
+    query_router = get_query_router()
+    query_router.display_statistics()
     
     if best_score >= quality_threshold:
         console.print(f"[bold green]✅ Quality threshold met[/bold green]\n")
