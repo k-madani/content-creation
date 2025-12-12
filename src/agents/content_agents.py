@@ -1,6 +1,6 @@
 """
-Content Creation Agents - Complete Implementation
-With: Health check, fallback, enhanced controller
+Content Creation Agents - Complete Implementation with RAG
+With: Health check, fallback, RAG-enhanced research
 """
 
 from crewai import Agent
@@ -71,7 +71,7 @@ class LLMHealthChecker:
 
 
 class ContentAgents:
-    """Factory for content creation agents"""
+    """Factory for content creation agents with RAG support"""
     
     def __init__(self):
         """Initialize with health check"""
@@ -101,18 +101,38 @@ class ContentAgents:
         self.has_fallback = len(self.fallback_chain) > 1
     
     def research_agent(self, tools: list) -> Agent:
-        """Research Agent with error resilience"""
+        """
+        Research Agent with RAG + Web Search fallback
+        
+        Enhanced with vector database retrieval for high-quality,
+        curated information before falling back to web search
+        """
         return Agent(
-            role="Content Research Specialist",
+            role="RAG-Enhanced Content Research Specialist",
             goal=(
-                "Gather comprehensive research using available tools. "
-                "If initial searches fail, try alternative queries. "
-                "Always provide useful findings even with limited results."
+                "Gather comprehensive, high-quality research using a multi-tiered approach:\n"
+                "1. FIRST: Search the RAG knowledge base for curated, verified information\n"
+                "2. SECOND: If RAG results insufficient, use web search (Wikipedia + DuckDuckGo)\n"
+                "3. ALWAYS: Synthesize findings from all sources into coherent research\n"
+                "4. PROVIDE: Rich context with citations and source attribution\n\n"
+                "Prioritize RAG sources for accuracy, supplement with web for breadth."
             ),
             backstory=(
-                "You are a persistent research analyst. When searches fail, "
-                "you adapt your approach and try different strategies. "
-                "You never give up and always find valuable information."
+                "You are an expert research analyst with access to both a curated "
+                "knowledge base and the open web. You understand that:\n\n"
+                "- The RAG knowledge base contains pre-verified, high-quality information\n"
+                "- RAG sources are more reliable for in-depth, accurate content\n"
+                "- Web search provides breadth and current events\n"
+                "- The best research combines both approaches strategically\n\n"
+                "You always try the RAG database first. If it contains relevant information, "
+                "you use it as the foundation. You then supplement with web search for "
+                "additional context, recent developments, or broader coverage.\n\n"
+                "When RAG returns empty or irrelevant results, you gracefully fall back "
+                "to web search without hesitation. You never refuse to research - you "
+                "adapt your strategy to find the best available information.\n\n"
+                "You cite your sources clearly, distinguishing between knowledge base "
+                "content and web-sourced information. Your research reports are "
+                "comprehensive, well-organized, and ready for the writer to use."
             ),
             tools=tools,
             llm=self.llm,
@@ -126,7 +146,7 @@ class ContentAgents:
         return Agent(
             role="Content Writer",
             goal=(
-                "Create high-quality content based on research. "
+                "Create high-quality, engaging content based on research. "
                 "Use tone analyzer to match target tone. "
                 "Always write - never refuse due to limited research."
             ),
