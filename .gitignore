@@ -11,6 +11,7 @@ env/
 # Environment variables (NEVER commit API keys!)
 .env
 .env.local
+knowledge_base/*
 
 # IDE
 .vscode/

@@ -1,5 +1,5 @@
 """
-Content Creation System - Complete with Feedback Loop
+Content Creation System - Complete with Feedback Loop + RAG
 """
 import warnings
 warnings.filterwarnings("ignore", category=FutureWarning)
@@ -22,6 +22,7 @@ import re
 from agents.content_agents import content_agents
 from tasks.content_tasks import content_tasks
 from tools.research_tool import research_tool
+from tools.rag_retrieval_tool import rag_retrieval_tool  # NEW
 from tools.seo_optimizer import seo_optimizer
 from tools.tone_analyzer import tone_analyzer
 from utils.user_input import UserInputCollector
@@ -29,6 +30,8 @@ from utils.progress_tracker import ContentProgressTracker
 from utils.quality_scorer import quality_scorer
 from utils.shared_memory import shared_memory
 from utils.feedback_loop import feedback_loop
+from utils.llm_manager import get_llm_manager
+from utils.query_router import get_query_router
 
 load_dotenv()
 console = Console()
@@ -41,7 +44,13 @@ def generate_single_attempt(config, attempt_num):
     tracker.start_tracking()
     
     console.print("\n[dim]Initializing agents...[/dim]")
-    research_agent = content_agents.research_agent([research_tool])
+    
+    # Research Agent with RAG + Web Search fallback
+    research_agent = content_agents.research_agent([
+        rag_retrieval_tool,  # NEW: Try RAG knowledge base first
+        research_tool        # EXISTING: Fallback to Wikipedia + DuckDuckGo
+    ])
+    
     writer_agent = content_agents.writer_agent([tone_analyzer])
     editor_agent = content_agents.editor_agent([tone_analyzer])
     seo_agent = content_agents.seo_agent([seo_optimizer, tone_analyzer])
@@ -79,7 +88,8 @@ def generate_single_attempt(config, attempt_num):
     
     try:
         console.print(f"[cyan]⏳ Generating (Attempt {attempt_num})...[/cyan]")
-        console.print("[dim]This takes approximately 90 seconds[/dim]\n")
+        console.print("[dim]This takes approximately 90 seconds[/dim]")
+        console.print("[dim]RAG-enhanced research → Writing → Editing → SEO[/dim]\n")
         
         # Mark stages as they happen (simple prints, no live tables)
         tracker.start_stage('research')
@@ -104,7 +114,17 @@ def generate_single_attempt(config, attempt_num):
         return final_content
         
     except Exception as e:
-        console.print(f"\n[red]✗ Failed: {str(e)[:100]}[/red]\n")
+        error_str = str(e)
+        console.print(f"\n[red]✗ Failed: {error_str[:100]}[/red]\n")
+        
+        # Check if rate limit error
+        llm_manager = get_llm_manager()
+        is_rate_limit = '429' in error_str or 'rate limit' in error_str.lower()
+        
+        if is_rate_limit:
+            console.print("[yellow]⚠️ Rate limit detected[/yellow]")
+            llm_manager.handle_failure('Gemini', e)
+        
         shared_memory.log_error('generation_failure', str(e), f'Attempt {attempt_num} failed')
         return None
 
@@ -112,7 +132,7 @@ def create_content_with_config(config: dict):
     """Generate content with feedback loop"""
     
     console.print("\n" + "="*60, style="bold")
-    console.print("🚀 CONTENT GENERATION WITH FEEDBACK LOOP", style="bold cyan")
+    console.print("🚀 CONTENT GENERATION WITH RAG + FEEDBACK LOOP", style="bold cyan")
     console.print("="*60 + "\n", style="bold")
     
     shared_memory.store('user_preferences', config, 'System')
@@ -129,7 +149,7 @@ def create_content_with_config(config: dict):
     for attempt in range(1, max_attempts + 1):
         
         console.print(f"\n[bold]{'='*60}[/bold]")
-        console.print(f"[bold cyan]📝 ATTEMPT {attempt}/{max_attempts}[/bold cyan]")
+        console.print(f"[bold cyan]🔍 ATTEMPT {attempt}/{max_attempts}[/bold cyan]")
         console.print(f"[bold]{'='*60}[/bold]\n")
         
         content = generate_single_attempt(config, attempt)
@@ -219,18 +239,27 @@ def create_content_with_config(config: dict):
     stats_table.add_column("Metric", style="cyan")
     stats_table.add_column("Value", style="white")
     
-    stats_table.add_row("📏 Words", f"{word_count}")
+    stats_table.add_row("📝 Words", f"{word_count}")
     stats_table.add_row("🎯 Target", f"{config['word_count']}")
     stats_table.add_row("📊 Diff", f"{word_diff:+d} ({word_diff/config['word_count']*100:+.1f}%)")
     stats_table.add_row("⭐ Score", f"{best_score}/100 ({best_quality_data['grade']})")
     stats_table.add_row("🔄 Attempts", f"{len(feedback_loop.attempt_history)}")
     stats_table.add_row("💾 File", str(filepath))
     stats_table.add_row("💰 Cost", "$0.00")
+    stats_table.add_row("🧠 Method", "RAG + Web Search")
     
     console.print(stats_table)
     
     # Memory summary
     shared_memory.display_summary()
+    
+    # LLM Manager statistics
+    llm_manager = get_llm_manager()
+    llm_manager.display_statistics()
+    
+    # Query Router statistics  
+    query_router = get_query_router()
+    query_router.display_statistics()
     
     if best_score >= quality_threshold:
         console.print(f"[bold green]✅ Quality threshold met[/bold green]\n")
@@ -245,7 +274,7 @@ def main():
     
     console.print("\n[bold cyan]╔═══════════════════════════════════════╗[/bold cyan]")
     console.print("[bold cyan]║  AI CONTENT GENERATION SYSTEM         ║[/bold cyan]")
-    console.print("[bold cyan]║  Feedback Loop + Shared Memory        ║[/bold cyan]")
+    console.print("[bold cyan]║  RAG + Feedback Loop + Shared Memory  ║[/bold cyan]")
     console.print("[bold cyan]╚═══════════════════════════════════════╝[/bold cyan]\n")
     
     try:

@@ -1,15 +1,17 @@
 """
-Content Creation Agents - Complete Implementation
-With: Health check, fallback, enhanced controller
+Content Creation Agents - Complete Implementation with RAG
+With: Health check, fallback, RAG-enhanced research
 """
 
 from crewai import Agent
 import os
 from dotenv import load_dotenv
 from rich.console import Console
+from utils.llm_manager import get_llm_manager
 
 load_dotenv()
 console = Console()
+llm_manager = get_llm_manager()
 
 
 class LLMHealthChecker:
@@ -71,7 +73,7 @@ class LLMHealthChecker:
 
 
 class ContentAgents:
-    """Factory for content creation agents"""
+    """Factory for content creation agents with RAG support"""
     
     def __init__(self):
         """Initialize with health check"""
@@ -101,32 +103,55 @@ class ContentAgents:
         self.has_fallback = len(self.fallback_chain) > 1
     
     def research_agent(self, tools: list) -> Agent:
-        """Research Agent with error resilience"""
+        """
+        Research Agent with RAG + Web Search fallback
+        Uses Groq for iteration-heavy research tasks
+        """
+        # Use Groq for research (many iterations expected)
+        research_llm = llm_manager.get_llm_string(prefer_groq=True)
+        
         return Agent(
-            role="Content Research Specialist",
+            role="RAG-Enhanced Content Research Specialist",
             goal=(
-                "Gather comprehensive research using available tools. "
-                "If initial searches fail, try alternative queries. "
-                "Always provide useful findings even with limited results."
+                "Gather comprehensive, high-quality research using a multi-tiered approach:\n"
+                "1. FIRST: Search the RAG knowledge base for curated, verified information\n"
+                "2. SECOND: If RAG results insufficient, use web search (Wikipedia + DuckDuckGo)\n"
+                "3. ALWAYS: Synthesize findings from all sources into coherent research\n"
+                "4. PROVIDE: Rich context with citations and source attribution\n\n"
+                "Prioritize RAG sources for accuracy, supplement with web for breadth."
             ),
             backstory=(
-                "You are a persistent research analyst. When searches fail, "
-                "you adapt your approach and try different strategies. "
-                "You never give up and always find valuable information."
+                "You are an expert research analyst with access to both a curated "
+                "knowledge base and the open web. You understand that:\n\n"
+                "- The RAG knowledge base contains pre-verified, high-quality information\n"
+                "- RAG sources are more reliable for in-depth, accurate content\n"
+                "- Web search provides breadth and current events\n"
+                "- The best research combines both approaches strategically\n\n"
+                "You always try the RAG database first. If it contains relevant information, "
+                "you use it as the foundation. You then supplement with web search for "
+                "additional context, recent developments, or broader coverage.\n\n"
+                "When RAG returns empty or irrelevant results, you gracefully fall back "
+                "to web search without hesitation. You never refuse to research - you "
+                "adapt your strategy to find the best available information.\n\n"
+                "You cite your sources clearly, distinguishing between knowledge base "
+                "content and web-sourced information. Your research reports are "
+                "comprehensive, well-organized, and ready for the writer to use."
             ),
             tools=tools,
-            llm=self.llm,
+            llm=research_llm,  # Use Groq for research
             verbose=True,
             allow_delegation=False,
-            max_iter=5
+            max_iter=3  # Reduced from 5
         )
     
     def writer_agent(self, tools: list) -> Agent:
-        """Writer Agent"""
+        """Writer Agent - Uses Gemini for quality"""
+        writer_llm = llm_manager.get_llm_string(prefer_groq=False)
+        
         return Agent(
             role="Content Writer",
             goal=(
-                "Create high-quality content based on research. "
+                "Create high-quality, engaging content based on research. "
                 "Use tone analyzer to match target tone. "
                 "Always write - never refuse due to limited research."
             ),
@@ -136,34 +161,39 @@ class ContentAgents:
                 "You adapt your writing to available information."
             ),
             tools=tools,
-            llm=self.llm,
+            llm=writer_llm,  # Use Gemini for writing quality
             verbose=True,
             allow_delegation=False,
-            max_iter=5
+            max_iter=3  # Reduced from 5
         )
     
     def editor_agent(self, tools: list) -> Agent:
-        """Editor Agent"""
+        """Editor Agent - Uses Groq for speed"""
+        editor_llm = llm_manager.get_llm_string(prefer_groq=True)
+    
         return Agent(
             role="Content Editor",
             goal=(
-                "Refine content to highest quality. "
-                "Improve readability, flow, and consistency. "
-                "Always improve - never refuse to edit."
+                "Review and polish the draft content. "
+                "CRITICAL: You MUST return the complete edited content, "
+                "not just notes about what you changed. "
+                "Output the full article text."
             ),
             backstory=(
                 "You are an expert editor who enhances any content. "
                 "You improve clarity, structure, and engagement."
             ),
             tools=tools,
-            llm=self.llm,
+            llm=editor_llm,  # Use Groq for editing
             verbose=True,
             allow_delegation=False,
-            max_iter=5
+            max_iter=2  # Reduced from 5
         )
     
     def seo_agent(self, tools: list) -> Agent:
-        """SEO Agent"""
+        """SEO Agent - Uses Gemini for analysis"""
+        seo_llm = llm_manager.get_llm_string(prefer_groq=False)
+        
         return Agent(
             role="SEO Specialist",
             goal=(
@@ -176,10 +206,10 @@ class ContentAgents:
                 "You optimize any content for better search rankings."
             ),
             tools=tools,
-            llm=self.llm,
+            llm=seo_llm,  # Use Gemini for SEO
             verbose=True,
             allow_delegation=False,
-            max_iter=5
+            max_iter=2  # Reduced from 5
         )
     
     def controller_agent(self) -> Agent:
