@@ -49,7 +49,7 @@ export default function ModeSelectionPage({ onSelectMode, onHome }) {
 
       <div className="max-w-6xl mx-auto px-6 py-16">
         <div className="text-center mb-12">
-          <h1 className="text-4xl font-bold mb-4">Choose Your Creation Mode</h1>
+          <h1 className="text-4xl font-bold mb-4" style={{ color: '#072e57' }}>Choose Your Creation Mode</h1>
           <p className="text-xl text-gray-600">Select the level of control you want</p>
         </div>
 
@@ -63,7 +63,7 @@ export default function ModeSelectionPage({ onSelectMode, onHome }) {
               <div className="text-gray-600 group-hover:text-primary mb-4 transition-colors">
                 {mode.icon}
               </div>
-              <h3 className="text-2xl font-bold mb-1">{mode.title}</h3>
+              <h3 className="text-2xl font-bold mb-1" style={{ color: '#072e57' }}>{mode.title}</h3>
               <p className="text-sm text-gray-500 mb-4">{mode.subtitle}</p>
               <p className="text-gray-600 mb-6">{mode.description}</p>
               

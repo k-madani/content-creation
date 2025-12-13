@@ -2,7 +2,7 @@ import Footer from '../components/Footer';
 
 export default function LandingPage({ onGetStarted }) {
   return (
-    <div className="min-h-screen" style={{ backgroundColor: '#f8fafc' }}>
+    <div className="min-h-screen" style={{ backgroundColor: '#ffffff' }}>
       {/* Header */}
       <header className="bg-white sticky top-0 z-50" style={{ borderBottom: '1px solid #e2e8f0' }}>
         <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
@@ -12,7 +12,7 @@ export default function LandingPage({ onGetStarted }) {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
               </svg>
             </div>
-            <span className="text-xl font-semibold" style={{ color: '#1a4d7a' }}>ContentFlow</span>
+            <span className="text-xl font-semibold" style={{ color: '#072e57' }}>ContentFlow</span>
           </div>
           <button className="p-2 hover:bg-gray-100 rounded-lg transition-colors">
             <svg className="w-6 h-6" style={{ color: '#64748b' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -22,13 +22,13 @@ export default function LandingPage({ onGetStarted }) {
         </div>
       </header>
 
-      {/* Hero Section */}
-      <section className="max-w-7xl mx-auto px-6 py-20 text-center">
+      {/* Hero Section - White */}
+      <section className="max-w-7xl mx-auto px-6 py-20 text-center" style={{ backgroundColor: '#ffffff' }}>
         <div className="max-w-4xl mx-auto">
           <p className="text-sm font-semibold uppercase tracking-wider mb-6" style={{ color: '#2563eb' }}>
             AI Writing Assistant
           </p>
-          <h1 className="text-7xl font-display font-bold mb-8 leading-tight" style={{ color: '#1a4d7a' }}>
+          <h1 className="text-7xl font-display font-bold mb-8 leading-tight" style={{ color: '#072e57' }}>
             Publish quality<br />
             content, <span className="italic font-light" style={{ color: '#64748b' }}>effortlessly</span>
           </h1>
@@ -60,14 +60,14 @@ export default function LandingPage({ onGetStarted }) {
               }}
               type="button"
               className="inline-flex items-center px-8 py-4 border-2 font-semibold text-base rounded-lg transition-all"
-              style={{ borderColor: '#e2e8f0', color: '#1a4d7a' }}
+              style={{ borderColor: '#e2e8f0', color: '#072e57', backgroundColor: 'transparent' }}
               onMouseEnter={(e) => {
                 e.currentTarget.style.borderColor = '#072e57';
-                e.currentTarget.style.color = '#072e57';
+                e.currentTarget.style.backgroundColor = '#f8fafc';
               }}
               onMouseLeave={(e) => {
                 e.currentTarget.style.borderColor = '#e2e8f0';
-                e.currentTarget.style.color = '#1a4d7a';
+                e.currentTarget.style.backgroundColor = 'transparent';
               }}
             >
               See How It Works
@@ -80,13 +80,13 @@ export default function LandingPage({ onGetStarted }) {
         </div>
       </section>
 
-      {/* How It Works */}
-      <section id="how-it-works" className="py-20" style={{ backgroundColor: '#f1f5f9' }}>
+      {/* How It Works - Very Light Gray */}
+      <section id="how-it-works" className="py-20" style={{ backgroundColor: '#f8fafc' }}>
         <div className="max-w-7xl mx-auto px-6">
           <p className="text-sm font-semibold uppercase tracking-wider text-center mb-4" style={{ color: '#2563eb' }}>
             How It Works
           </p>
-          <h2 className="text-5xl font-display font-bold text-center mb-16" style={{ color: '#1a4d7a' }}>
+          <h2 className="text-5xl font-display font-bold text-center mb-16" style={{ color: '#072e57' }}>
             Five steps to <span className="italic font-light" style={{ color: '#64748b' }}>publication-ready</span> content
           </h2>
           
@@ -127,11 +127,11 @@ export default function LandingPage({ onGetStarted }) {
                 }
               ].map((step) => (
                 <div key={step.num} className="text-center relative z-10">
-                  <div className="w-20 h-20 bg-white rounded-full flex items-center justify-center mx-auto mb-6 shadow-sm" style={{ border: '2px solid #e2e8f0', color: '#072e57' }}>
+                  <div className="w-20 h-20 bg-white rounded-full flex items-center justify-center mx-auto mb-6 shadow-md" style={{ border: '2px solid #e2e8f0', color: '#072e57' }}>
                     {step.icon}
                   </div>
                   <div className="text-xs font-semibold mb-2" style={{ color: '#94a3b8' }}>{step.num}</div>
-                  <h3 className="font-bold text-lg mb-3" style={{ color: '#1a4d7a' }}>{step.title}</h3>
+                  <h3 className="font-bold text-lg mb-3" style={{ color: '#072e57' }}>{step.title}</h3>
                   <p className="text-sm leading-relaxed" style={{ color: '#64748b' }}>{step.desc}</p>
                 </div>
               ))}
@@ -140,13 +140,13 @@ export default function LandingPage({ onGetStarted }) {
         </div>
       </section>
 
-      {/* Features */}
-      <section className="bg-white py-20">
+      {/* Features - White */}
+      <section className="py-20" style={{ backgroundColor: '#ffffff' }}>
         <div className="max-w-7xl mx-auto px-6">
           <p className="text-sm font-semibold uppercase tracking-wider text-center mb-4" style={{ color: '#2563eb' }}>
             Features
           </p>
-          <h2 className="text-5xl font-display font-bold text-center mb-16" style={{ color: '#1a4d7a' }}>
+          <h2 className="text-5xl font-display font-bold text-center mb-16" style={{ color: '#072e57' }}>
             Built for <span className="italic font-light" style={{ color: '#64748b' }}>modern</span> content teams
           </h2>
           
@@ -185,7 +185,7 @@ export default function LandingPage({ onGetStarted }) {
             ].map((feature) => (
               <div key={feature.title} className="text-center p-8">
                 <div className="flex justify-center mb-5" style={{ color: '#072e57' }}>{feature.icon}</div>
-                <h3 className="font-bold text-xl mb-3" style={{ color: '#1a4d7a' }}>{feature.title}</h3>
+                <h3 className="font-bold text-xl mb-3" style={{ color: '#072e57' }}>{feature.title}</h3>
                 <p className="leading-relaxed" style={{ color: '#64748b' }}>{feature.desc}</p>
               </div>
             ))}

@@ -33,24 +33,24 @@ export default function ProgressBar({ stage, data }) {
     <div>
       <div className="flex items-center justify-between mb-2">
         <div className="flex items-center gap-2">
-          <span className="text-gray-600">{stageIcons[stage]}</span>
-          <span className="font-medium">{stageNames[stage]}</span>
+          <span style={{ color: '#072e57' }}>{stageIcons[stage]}</span>
+          <span className="font-medium" style={{ color: '#072e57' }}>{stageNames[stage]}</span>
         </div>
         {data.status === 'complete' && (
           <span className="text-green-600 font-medium">✓ Complete</span>
         )}
         {data.status === 'working' && (
-          <span className="text-blue-600 font-medium">{data.progress}%</span>
+          <span className="font-medium" style={{ color: '#072e57' }}>{data.progress}%</span>
         )}
       </div>
       <div className="w-full bg-gray-200 rounded-full h-2">
         <div
-          className={`h-2 rounded-full transition-all duration-500 ${
-            data.status === 'complete' ? 'bg-green-600' :
-            data.status === 'working' ? 'bg-blue-600' :
-            'bg-gray-300'
-          }`}
-          style={{ width: `${data.progress}%` }}
+          className="h-2 rounded-full transition-all duration-500"
+          style={{ 
+            width: `${data.progress}%`,
+            backgroundColor: data.status === 'complete' ? '#10b981' : 
+                           data.status === 'working' ? '#072e57' : '#d1d5db'
+          }}
         />
       </div>
       {data.message && (
