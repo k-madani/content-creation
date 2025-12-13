@@ -76,72 +76,28 @@ def generate_single_attempt(config, attempt_num):
         agents=[research_agent, writer_agent, editor_agent, seo_agent],
         tasks=[research_task, writing_task, editing_task, seo_task],
         process=Process.sequential,
-        verbose=False  # KEY: No verbose output from CrewAI
+        verbose=False  
     )
     
     try:
-        console.print(f"[cyan]⏳ Generating (Attempt {attempt_num})...[/cyan]")
+        console.print(f"\n[cyan]⏳ Generating (Attempt {attempt_num})...[/cyan]")
         console.print("[dim]This takes approximately 90 seconds[/dim]\n")
         
-        # Mark stages as they happen (simple prints, no live tables)
-        tracker.start_stage('research')
+        # Simple 1-line progress updates
+        console.print("[cyan]🔍 Research...[/cyan]", end=" ", flush=True)
         
-        # Execute crew
+        # Execute crew (runs all agents)
         result = crew.kickoff()
         
-        # Mark all stages complete (crew runs them sequentially)
-        tracker.complete_stage('research')
-        tracker.complete_stage('writing')
-        tracker.complete_stage('editing')
-        tracker.complete_stage('seo')
-        
-        # Show ONE summary table at the end
-        console.print("\n")
-        console.print(tracker.get_completion_summary())
-        console.print("\n")
-        
-        final_content = f"# {config['title']}\n\n{result}"
-        
-        # ===== NEW: MULTIMODAL IMAGE GENERATION =====
-        if config.get('include_images', False):
-            console.print("[bold cyan]🎨 MULTIMODAL STAGE: Image Generation[/bold cyan]\n")
-            
-            try:
-                # Initialize image generator
-                image_gen = ImageGenerator()
-                
-                # Generate safe filename
-                safe_filename = re.sub(r'[^\w\s-]', '', config['topic']).strip().replace(' ', '_')[:50]
-                
-                # Generate images
-                images = image_gen.generate_images_for_content(
-                    content=final_content,
-                    tone=config['tone'],
-                    num_images=config.get('image_count', 3),
-                    base_filename=safe_filename
-                )
-                
-                if images:
-                    # Embed images in content
-                    final_content = image_gen.embed_images_in_content(final_content, images)
-                    
-                    console.print(f"[green]✓ Multimodal integration complete: {len(images)} images generated[/green]\n")
-                    
-                    # Store image info in shared memory
-                    shared_memory.store('generated_images', images, 'ImageGenerator')
-                else:
-                    console.print("[yellow]⚠️  No images generated, continuing with text-only content[/yellow]\n")
-            
-            except Exception as e:
-                console.print(f"[yellow]⚠️  Image generation failed: {str(e)[:100]}[/yellow]")
-                console.print("[dim]   Continuing with text-only content...[/dim]\n")
-                shared_memory.log_error('image_generation', str(e), 'Graceful degradation to text-only')
-        # ===== END MULTIMODAL INTEGRATION =====
-        
-        shared_memory.add_content_version(f'attempt_{attempt_num}', final_content)
-        
-        return final_content
-        
+        # Simple completion messages
+        console.print("[green]✓[/green]")
+        console.print("[cyan]✍️  Writing...[/cyan]", end=" ", flush=True)
+        console.print("[green]✓[/green]")
+        console.print("[cyan]✨ Editing...[/cyan]", end=" ", flush=True)
+        console.print("[green]✓[/green]")
+        console.print("[cyan]🎯 SEO...[/cyan]", end=" ", flush=True)
+        console.print("[green]✓[/green]\n")
+
     except Exception as e:
         console.print(f"\n[red]✗ Failed: {str(e)[:100]}[/red]\n")
         shared_memory.log_error('generation_failure', str(e), f'Attempt {attempt_num} failed')

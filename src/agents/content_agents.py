@@ -1,6 +1,6 @@
 """
 Content Creation Agents - Complete Implementation
-With: Health check, fallback, enhanced controller
+With: Health check, fallback, load balancing across providers
 """
 
 from crewai import Agent
@@ -29,7 +29,7 @@ class LLMHealthChecker:
         if self.gemini_key and self.gemini_key.startswith('AIza'):
             console.print("  [green]OK Gemini: Available[/green]")
             self.health_status['gemini'] = True
-            self.fallback_chain.append(('gemini/gemini-2.5-flash', 'Gemini'))
+            self.fallback_chain.append(('gemini/gemini-1.5-flash', 'Gemini 1.5'))
         else:
             console.print("  [dim]WARNING Gemini: Not configured[/dim]")
             self.health_status['gemini'] = False
@@ -45,10 +45,11 @@ class LLMHealthChecker:
         healthy = sum(self.health_status.values())
         
         if self.fallback_chain:
-            console.print(f"\n[cyan]Fallback Chain ({healthy} provider{'s' if healthy != 1 else ''}):[/cyan]")
-            for i, (model, name) in enumerate(self.fallback_chain, 1):
-                tier = "Primary" if i == 1 else f"Fallback"
-                console.print(f"  {i}. [{tier}] {name}")
+            console.print(f"\n[cyan]Load Balanced Strategy:[/cyan]")
+            console.print("  Research → Groq (heavy lifting)")
+            console.print("  Writer → Gemini 1.5 (creative quality)")
+            console.print("  Editor → Groq (fast refinement)")
+            console.print("  SEO → Gemini 1.5 (final polish)")
         
         console.print()
         return healthy > 0
@@ -59,26 +60,26 @@ class LLMHealthChecker:
         if strategy == "groq_first":
             for model, name in self.fallback_chain:
                 if 'groq' in model:
-                    console.print(f"[cyan]Selected: {name}[/cyan]\n")
+                    console.print(f"[cyan]Primary: {name}[/cyan]\n")
                     return model
         
         if self.fallback_chain:
             model, name = self.fallback_chain[0]
-            console.print(f"[cyan]Selected: {name}[/cyan]\n")
+            console.print(f"[cyan]Primary: {name}[/cyan]\n")
             return model
         
         return None
 
 
 class ContentAgents:
-    """Factory for content creation agents"""
+    """Factory for content creation agents with load balancing"""
     
     def __init__(self):
         """Initialize with health check"""
         
         self.gemini_key = os.getenv("GEMINI_API_KEY")
         self.groq_key = os.getenv("GROQ_API_KEY")
-        self.llm_strategy = os.getenv("LLM_STRATEGY", "gemini_first")
+        self.llm_strategy = os.getenv("LLM_STRATEGY", "balanced")
         
         if self.gemini_key:
             os.environ["GEMINI_API_KEY"] = self.gemini_key
@@ -96,12 +97,17 @@ class ContentAgents:
                 "  GROQ_API_KEY=... (https://console.groq.com/keys)\n"
             )
         
-        self.llm = self.health_checker.get_primary_llm(self.llm_strategy)
+        # Load balanced LLM assignment
+        self.research_llm = 'groq/llama-3.3-70b-versatile'
+        self.writer_llm = 'gemini/gemini-1.5-flash'
+        self.editor_llm = 'groq/llama-3.3-70b-versatile'
+        self.seo_llm = 'gemini/gemini-1.5-flash'
+        
         self.fallback_chain = self.health_checker.fallback_chain
         self.has_fallback = len(self.fallback_chain) > 1
     
     def research_agent(self, tools: list) -> Agent:
-        """Research Agent with error resilience"""
+        """Research Agent - Uses GROQ (handles multiple tool calls)"""
         return Agent(
             role="Content Research Specialist",
             goal=(
@@ -115,14 +121,14 @@ class ContentAgents:
                 "You never give up and always find valuable information."
             ),
             tools=tools,
-            llm=self.llm,
-            verbose=True,
+            llm=self.research_llm,  # GROQ
+            verbose=False,  # Reduced logging
             allow_delegation=False,
             max_iter=5
         )
     
     def writer_agent(self, tools: list) -> Agent:
-        """Writer Agent"""
+        """Writer Agent - Uses GEMINI 1.5 (creative writing)"""
         return Agent(
             role="Content Writer",
             goal=(
@@ -136,14 +142,14 @@ class ContentAgents:
                 "You adapt your writing to available information."
             ),
             tools=tools,
-            llm=self.llm,
-            verbose=True,
+            llm=self.writer_llm,  # GEMINI 1.5
+            verbose=False,  # Reduced logging
             allow_delegation=False,
             max_iter=5
         )
     
     def editor_agent(self, tools: list) -> Agent:
-        """Editor Agent"""
+        """Editor Agent - Uses GROQ (fast refinement)"""
         return Agent(
             role="Content Editor",
             goal=(
@@ -156,14 +162,14 @@ class ContentAgents:
                 "You improve clarity, structure, and engagement."
             ),
             tools=tools,
-            llm=self.llm,
-            verbose=True,
+            llm=self.editor_llm,  # GROQ
+            verbose=False,  # Reduced logging
             allow_delegation=False,
             max_iter=5
         )
     
     def seo_agent(self, tools: list) -> Agent:
-        """SEO Agent"""
+        """SEO Agent - Uses GEMINI 1.5 (final quality)"""
         return Agent(
             role="SEO Specialist",
             goal=(
@@ -176,14 +182,16 @@ class ContentAgents:
                 "You optimize any content for better search rankings."
             ),
             tools=tools,
-            llm=self.llm,
-            verbose=True,
+            llm=self.seo_llm,  # GEMINI 1.5
+            verbose=False,  # Reduced logging
             allow_delegation=False,
             max_iter=5
         )
     
     def controller_agent(self) -> Agent:
-        """Enhanced Controller with decision-making"""
+        """Enhanced Controller - Uses primary LLM"""
+        primary_llm = self.health_checker.get_primary_llm(self.llm_strategy)
+        
         return Agent(
             role="Intelligent Content Project Manager",
             goal=(
@@ -202,8 +210,8 @@ class ContentAgents:
                 "request additional research, or optimize parameters. "
                 "Your goal is optimal outcomes, not just task completion."
             ),
-            llm=self.llm,
-            verbose=True,
+            llm=primary_llm,
+            verbose=False,  # Reduced logging
             allow_delegation=True,
             max_iter=15
         )
