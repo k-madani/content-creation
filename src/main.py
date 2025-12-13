@@ -2,6 +2,7 @@
 Content Creation System - Complete with Feedback Loop
 """
 import warnings
+import fix_signals
 warnings.filterwarnings("ignore", category=FutureWarning)
 warnings.filterwarnings("ignore", message=".*Python version.*")
 
