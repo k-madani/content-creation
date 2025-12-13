@@ -1,27 +1,25 @@
-# Core Dependencies
-crewai>=0.70.0
-crewai-tools>=0.12.0
+# Core - Let these drive all other dependencies
+crewai==0.28.8
+crewai-tools==0.1.6
 
-# LLM Providers - Compatible versions
-google-generativeai>=0.8.0
-groq>=0.11.0
-langchain-groq>=0.2.0
-langchain-google-genai>=2.0.0
-langchain-core>=0.3.15,<0.4.0
-langchain>=0.3.0
-ollama>=0.3.0
+# LLM Providers
+google-generativeai
+groq
+langchain-groq
+langchain-google-genai
 
 # Research Tools
-wikipedia>=1.4.0
-duckduckgo-search>=6.0.0
-requests>=2.32.0
-beautifulsoup4>=4.12.0
+wikipedia
+duckduckgo-search
+requests
+beautifulsoup4
+lxml
 
-# SEO and Content Analysis
-nltk>=3.9.0
-textblob>=0.18.0
-langdetect>=1.0.9
-textstat>=0.7.3
+# Content Analysis
+nltk
+textblob
+langdetect
+textstat
 
 # Utilities
 python-dotenv>=1.0.0

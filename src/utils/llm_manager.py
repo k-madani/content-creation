@@ -32,7 +32,6 @@ class LLMManager:
         
         self.gemini_model = os.getenv("GEMINI_MODEL", "gemini-1.5-flash")
         self.groq_model = os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")
-        self.ollama_model = os.getenv("OLLAMA_MODEL", "llama3.2:latest")
         
         self.max_retries = int(os.getenv("MAX_RETRIES", "3"))
         self.timeout = int(os.getenv("TIMEOUT_SECONDS", "30"))
