@@ -3,7 +3,8 @@ export default function ProgressBar({ stage, data }) {
     research: 'Research',
     writing: 'Writing',
     editing: 'Editing',
-    seo: 'SEO Optimization'
+    seo: 'SEO Optimization',
+    images: 'Image Generation'  // 🎨 NEW STAGE
   };
 
   const stageIcons = {
@@ -26,6 +27,11 @@ export default function ProgressBar({ stage, data }) {
       <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
       </svg>
+    ),
+    images: (  // 🎨 NEW ICON
+      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+      </svg>
     )
   };
 
@@ -42,6 +48,9 @@ export default function ProgressBar({ stage, data }) {
         {data.status === 'working' && (
           <span className="font-medium" style={{ color: '#072e57' }}>{data.progress}%</span>
         )}
+        {data.status === 'error' && (
+          <span className="text-red-600 font-medium">✗ Error</span>
+        )}
       </div>
       <div className="w-full bg-gray-200 rounded-full h-2">
         <div
@@ -49,7 +58,8 @@ export default function ProgressBar({ stage, data }) {
           style={{ 
             width: `${data.progress}%`,
             backgroundColor: data.status === 'complete' ? '#10b981' : 
-                           data.status === 'working' ? '#072e57' : '#d1d5db'
+                           data.status === 'working' ? '#072e57' :
+                           data.status === 'error' ? '#ef4444' : '#d1d5db'
           }}
         />
       </div>

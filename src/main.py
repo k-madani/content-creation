@@ -1,5 +1,6 @@
 """
 Content Creation System - Complete with Feedback Loop + Multimodal Integration
+FIXED: Added return statement in generate_single_attempt
 """
 import warnings
 import fix_signals
@@ -16,7 +17,6 @@ from dotenv import load_dotenv
 from rich.console import Console
 from rich.prompt import Prompt, Confirm
 from rich.table import Table
-from rich.live import Live
 import time
 import re
 
@@ -25,7 +25,7 @@ from tasks.content_tasks import content_tasks
 from tools.research_tool import research_tool
 from tools.seo_optimizer import seo_optimizer
 from tools.tone_analyzer import tone_analyzer
-from tools.image_generator import ImageGenerator  # NEW IMPORT
+from tools.image_generator import ImageGenerator
 from utils.user_input import UserInputCollector
 from utils.progress_tracker import ContentProgressTracker
 from utils.quality_scorer import quality_scorer
@@ -81,27 +81,31 @@ def generate_single_attempt(config, attempt_num):
     
     try:
         console.print(f"\n[cyan]⏳ Generating (Attempt {attempt_num})...[/cyan]")
-        console.print("[dim]This takes approximately 90 seconds[/dim]\n")
+        console.print("[dim]This takes approximately 90 seconds[/dim]\n")   
         
         # Simple 1-line progress updates
-        console.print("[cyan]🔍 Research...[/cyan]", end=" ", flush=True)
+        console.print("[cyan]🔍 Research...[/cyan]", end=" ")
         
         # Execute crew (runs all agents)
         result = crew.kickoff()
         
         # Simple completion messages
         console.print("[green]✓[/green]")
-        console.print("[cyan]✍️  Writing...[/cyan]", end=" ", flush=True)
+        console.print("[cyan]✍️  Writing...[/cyan]", end=" ")
         console.print("[green]✓[/green]")
-        console.print("[cyan]✨ Editing...[/cyan]", end=" ", flush=True)
+        console.print("[cyan]✨ Editing...[/cyan]", end=" ")
         console.print("[green]✓[/green]")
-        console.print("[cyan]🎯 SEO...[/cyan]", end=" ", flush=True)
+        console.print("[cyan]🎯 SEO...[/cyan]", end=" ")
         console.print("[green]✓[/green]\n")
+        
+        # CRITICAL FIX: Return the result!
+        return result
 
     except Exception as e:
         console.print(f"\n[red]✗ Failed: {str(e)[:100]}[/red]\n")
         shared_memory.log_error('generation_failure', str(e), f'Attempt {attempt_num} failed')
         return None
+
 
 def create_content_with_config(config: dict):
     """Generate content with feedback loop"""
@@ -184,9 +188,8 @@ def create_content_with_config(config: dict):
                         config[key] = value
                         console.print(f"  → Word count: {value}")
                 console.print()
-            
-            console.print("[dim]⏳ Waiting 30s to avoid rate limits...[/dim]\n")
-            time.sleep(30)
+            console.print("[dim]⏳ Waiting 60s to avoid rate limits...[/dim]\n")
+            time.sleep(60)
     
     feedback_loop.display_history()
     
@@ -202,7 +205,7 @@ def create_content_with_config(config: dict):
     filepath = output_dir / f"{safe_filename}.md"
     
     with open(filepath, "w", encoding="utf-8") as f:
-        f.write(best_content)
+        f.write(str(best_content))
     
     console.print(f"[green]✓[/green] Saved to: {filepath}\n")
     
@@ -216,7 +219,7 @@ def create_content_with_config(config: dict):
     stats_table.add_column("Metric", style="cyan")
     stats_table.add_column("Value", style="white")
     
-    stats_table.add_row("📝 Words", f"{word_count}")
+    stats_table.add_row("📏 Words", f"{word_count}")
     stats_table.add_row("🎯 Target", f"{config['word_count']}")
     stats_table.add_row("📊 Diff", f"{word_diff:+d} ({word_diff/config['word_count']*100:+.1f}%)")
     stats_table.add_row("⭐ Score", f"{best_score}/100 ({best_quality_data['grade']})")

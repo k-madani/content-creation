@@ -1,15 +1,22 @@
 """
 Content Creation Agents - Complete Implementation
-With: Health check, fallback, load balancing across providers
+With: Prompt templates, health check, fallback, load balancing
+FIXED: Proper provider prefixes and load distribution
 """
 
 from crewai import Agent
 import os
 from dotenv import load_dotenv
 from rich.console import Console
+import litellm
+from prompts.prompt_templates import PromptTemplates, sanitize_user_input
 
 load_dotenv()
 console = Console()
+
+# Configure LiteLLM globally
+litellm.drop_params = True
+litellm.set_verbose = False
 
 
 class LLMHealthChecker:
@@ -29,7 +36,7 @@ class LLMHealthChecker:
         if self.gemini_key and self.gemini_key.startswith('AIza'):
             console.print("  [green]OK Gemini: Available[/green]")
             self.health_status['gemini'] = True
-            self.fallback_chain.append(('gemini/gemini-1.5-flash', 'Gemini 1.5'))
+            self.fallback_chain.append(('gemini/gemini-2.0-flash-exp', 'Gemini'))
         else:
             console.print("  [dim]WARNING Gemini: Not configured[/dim]")
             self.health_status['gemini'] = False
@@ -45,13 +52,15 @@ class LLMHealthChecker:
         healthy = sum(self.health_status.values())
         
         if self.fallback_chain:
-            console.print(f"\n[cyan]Load Balanced Strategy:[/cyan]")
-            console.print("  Research → Groq (heavy lifting)")
-            console.print("  Writer → Gemini 1.5 (creative quality)")
-            console.print("  Editor → Groq (fast refinement)")
-            console.print("  SEO → Gemini 1.5 (final polish)")
+            console.print(f"\n[cyan]Fallback Chain ({len(self.fallback_chain)} providers):[/cyan]")
+            for i, (model, name) in enumerate(self.fallback_chain, 1):
+                prefix = "[Primary]" if i == 1 else "[Fallback]"
+                console.print(f"  {i}. {prefix} {name}")
         
-        console.print()
+        if healthy > 0:
+            primary_model, primary_name = self.fallback_chain[0]
+            console.print(f"\n[bold green]Selected: {primary_name}[/bold green]\n")
+        
         return healthy > 0
     
     def get_primary_llm(self, strategy="gemini_first"):
@@ -60,27 +69,29 @@ class LLMHealthChecker:
         if strategy == "groq_first":
             for model, name in self.fallback_chain:
                 if 'groq' in model:
-                    console.print(f"[cyan]Primary: {name}[/cyan]\n")
                     return model
         
         if self.fallback_chain:
             model, name = self.fallback_chain[0]
-            console.print(f"[cyan]Primary: {name}[/cyan]\n")
             return model
         
         return None
 
 
 class ContentAgents:
-    """Factory for content creation agents with load balancing"""
+    """Factory for content creation agents with prompt templates and load balancing"""
     
     def __init__(self):
         """Initialize with health check"""
         
         self.gemini_key = os.getenv("GEMINI_API_KEY")
         self.groq_key = os.getenv("GROQ_API_KEY")
-        self.llm_strategy = os.getenv("LLM_STRATEGY", "balanced")
+        self.llm_strategy = os.getenv("LLM_STRATEGY", "gemini_first")
         
+        # Initialize prompt templates
+        self.templates = PromptTemplates()
+        
+        # Set environment variables for LiteLLM
         if self.gemini_key:
             os.environ["GEMINI_API_KEY"] = self.gemini_key
         if self.groq_key:
@@ -97,121 +108,141 @@ class ContentAgents:
                 "  GROQ_API_KEY=... (https://console.groq.com/keys)\n"
             )
         
-        # Load balanced LLM assignment
-        self.research_llm = 'groq/llama-3.3-70b-versatile'
-        self.writer_llm = 'gemini/gemini-1.5-flash'
-        self.editor_llm = 'groq/llama-3.3-70b-versatile'
-        self.seo_llm = 'gemini/gemini-1.5-flash'
+        # LOAD BALANCED: Distribute work across both providers
+        # Research is heavy (162s) → Use Gemini (higher daily limit: 1500/day)
+        # Writer needs quality → Use Gemini  
+        # Editor is fast (<1s) → Use Groq (faster inference: 30/min)
+        # SEO is fast (<1s) → Use Groq
+        
+        if self.health_checker.health_status.get('gemini'):
+            self.research_llm = 'gemini/gemini-2.0-flash-exp'
+            self.writer_llm = 'gemini/gemini-2.0-flash-exp'
+        else:
+            # Fallback to Groq if Gemini unavailable
+            self.research_llm = 'groq/llama-3.3-70b-versatile'
+            self.writer_llm = 'groq/llama-3.3-70b-versatile'
+        
+        if self.health_checker.health_status.get('groq'):
+            self.editor_llm = 'groq/llama-3.3-70b-versatile'
+            self.seo_llm = 'groq/llama-3.3-70b-versatile'
+        else:
+            # Fallback to Gemini if Groq unavailable
+            self.editor_llm = 'gemini/gemini-2.0-flash-exp'
+            self.seo_llm = 'gemini/gemini-2.0-flash-exp'
         
         self.fallback_chain = self.health_checker.fallback_chain
         self.has_fallback = len(self.fallback_chain) > 1
+        
+        # Display load balancing strategy
+        self._display_load_balancing()
+    
+    def _display_load_balancing(self):
+        """Display which provider handles which agent"""
+        console.print(f"\n[cyan]Load Balanced Strategy:[/cyan]")
+        
+        # Research
+        research_provider = "Gemini" if "gemini" in self.research_llm else "Groq"
+        console.print(f"  Research → {research_provider} (heavy lifting, 162s)")
+        
+        # Writer
+        writer_provider = "Gemini" if "gemini" in self.writer_llm else "Groq"
+        console.print(f"  Writer → {writer_provider} (creative quality)")
+        
+        # Editor
+        editor_provider = "Groq" if "groq" in self.editor_llm else "Gemini"
+        console.print(f"  Editor → {editor_provider} (fast refinement, <1s)")
+        
+        # SEO
+        seo_provider = "Groq" if "groq" in self.seo_llm else "Gemini"
+        console.print(f"  SEO → {seo_provider} (final polish, <1s)")
+        
+        console.print()
     
     def research_agent(self, tools: list) -> Agent:
-        """Research Agent - Uses GROQ (handles multiple tool calls)"""
+        """Research Agent with structured prompting"""
+        
         return Agent(
-            role="Content Research Specialist",
-            goal=(
-                "Gather comprehensive research using available tools. "
-                "If initial searches fail, try alternative queries. "
-                "Always provide useful findings even with limited results."
-            ),
-            backstory=(
-                "You are a persistent research analyst. When searches fail, "
-                "you adapt your approach and try different strategies. "
-                "You never give up and always find valuable information."
-            ),
+            role=self.templates.RESEARCH_AGENT_PROMPT['role'],
+            goal=self.templates.RESEARCH_AGENT_PROMPT['goal'],
+            backstory=self.templates.RESEARCH_AGENT_PROMPT['backstory'],
             tools=tools,
-            llm=self.research_llm,  # GROQ
-            verbose=False,  # Reduced logging
+            llm=self.research_llm,
+            verbose=False,
             allow_delegation=False,
             max_iter=5
         )
     
     def writer_agent(self, tools: list) -> Agent:
-        """Writer Agent - Uses GEMINI 1.5 (creative writing)"""
+        """Writer Agent with few-shot examples"""
+        
+        # Enhanced goal with few-shot examples
+        enhanced_goal = (
+            self.templates.WRITER_AGENT_PROMPT['goal'] + 
+            "\n\n" + 
+            "EXAMPLE OF GOOD INTRODUCTION:\n" +
+            self.templates.WRITING_EXAMPLES['good_intro'] +
+            "\n\n" +
+            "EXAMPLE OF GOOD CONCLUSION:\n" +
+            self.templates.WRITING_EXAMPLES['good_conclusion']
+        )
+        
         return Agent(
-            role="Content Writer",
-            goal=(
-                "Create high-quality content based on research. "
-                "Use tone analyzer to match target tone. "
-                "Always write - never refuse due to limited research."
-            ),
-            backstory=(
-                "You are a professional writer who creates compelling content. "
-                "Even with limited research, you produce valuable articles. "
-                "You adapt your writing to available information."
-            ),
+            role=self.templates.WRITER_AGENT_PROMPT['role'],
+            goal=enhanced_goal,
+            backstory=self.templates.WRITER_AGENT_PROMPT['backstory'],
             tools=tools,
-            llm=self.writer_llm,  # GEMINI 1.5
-            verbose=False,  # Reduced logging
+            llm=self.writer_llm,
+            verbose=False,
             allow_delegation=False,
             max_iter=5
         )
     
     def editor_agent(self, tools: list) -> Agent:
-        """Editor Agent - Uses GROQ (fast refinement)"""
+        """Editor Agent with structured prompting"""
+        
         return Agent(
-            role="Content Editor",
-            goal=(
-                "Refine content to highest quality. "
-                "Improve readability, flow, and consistency. "
-                "Always improve - never refuse to edit."
-            ),
-            backstory=(
-                "You are an expert editor who enhances any content. "
-                "You improve clarity, structure, and engagement."
-            ),
+            role=self.templates.EDITOR_AGENT_PROMPT['role'],
+            goal=self.templates.EDITOR_AGENT_PROMPT['goal'],
+            backstory=self.templates.EDITOR_AGENT_PROMPT['backstory'],
             tools=tools,
-            llm=self.editor_llm,  # GROQ
-            verbose=False,  # Reduced logging
+            llm=self.editor_llm,
+            verbose=False,
             allow_delegation=False,
             max_iter=5
         )
     
     def seo_agent(self, tools: list) -> Agent:
-        """SEO Agent - Uses GEMINI 1.5 (final quality)"""
+        """SEO Agent with structured prompting"""
+        
+        # Enhanced goal with SEO best practices
+        enhanced_goal = (
+            self.templates.SEO_AGENT_PROMPT['goal'] +
+            "\n\n" +
+            "SEO BEST PRACTICES:\n" +
+            self.templates.SEO_GUIDELINES
+        )
+        
         return Agent(
-            role="SEO Specialist",
-            goal=(
-                "Optimize content for search engines. "
-                "Ensure proper keywords and meta tags. "
-                "Always optimize what you receive."
-            ),
-            backstory=(
-                "You are an SEO expert who maximizes content visibility. "
-                "You optimize any content for better search rankings."
-            ),
+            role=self.templates.SEO_AGENT_PROMPT['role'],
+            goal=enhanced_goal,
+            backstory=self.templates.SEO_AGENT_PROMPT['backstory'],
             tools=tools,
-            llm=self.seo_llm,  # GEMINI 1.5
-            verbose=False,  # Reduced logging
+            llm=self.seo_llm,
+            verbose=False,
             allow_delegation=False,
             max_iter=5
         )
     
     def controller_agent(self) -> Agent:
-        """Enhanced Controller - Uses primary LLM"""
+        """Enhanced Controller with decision-making prompts"""
         primary_llm = self.health_checker.get_primary_llm(self.llm_strategy)
         
         return Agent(
-            role="Intelligent Content Project Manager",
-            goal=(
-                "Orchestrate content creation with adaptive decision-making. "
-                "Monitor quality and adjust workflow as needed. "
-                "Handle errors by finding alternative approaches. "
-                "Make intelligent decisions about resource allocation. "
-                "Learn from failures and optimize future generations."
-            ),
-            backstory=(
-                "You are an AI-powered project manager with advanced reasoning. "
-                "You analyze situations and adapt strategies dynamically. "
-                "When quality is low, you identify root causes and adjust. "
-                "When agents struggle, you find alternative approaches. "
-                "You have decision-making authority to modify workflows, "
-                "request additional research, or optimize parameters. "
-                "Your goal is optimal outcomes, not just task completion."
-            ),
+            role=self.templates.CONTROLLER_AGENT_PROMPT['role'],
+            goal=self.templates.CONTROLLER_AGENT_PROMPT['goal'],
+            backstory=self.templates.CONTROLLER_AGENT_PROMPT['backstory'],
             llm=primary_llm,
-            verbose=False,  # Reduced logging
+            verbose=False,
             allow_delegation=True,
             max_iter=15
         )

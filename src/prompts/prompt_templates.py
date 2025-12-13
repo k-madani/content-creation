@@ -4,6 +4,9 @@ Demonstrates systematic prompt design with role-based instructions,
 chain-of-thought guidance, and quality controls
 """
 
+import re  # CRITICAL FIX: Added missing import
+
+
 class PromptTemplates:
     """Centralized prompt management with versioning"""
     
@@ -107,8 +110,8 @@ class PromptTemplates:
         "goal": """Optimize content for search engines while maintaining quality.
         
         SEO REQUIREMENTS:
-        1. Meta title (50-60 chars, includes primary keyword)
-        2. Meta description (150-160 chars, compelling with keyword)
+        1. Meta title (50-60 characters, includes main keyword)
+        2. Meta description (150-160 characters, compelling with keyword)
         3. URL slug (short, descriptive, keyword-rich)
         4. Header optimization (H1 → H2 → H3 hierarchy)
         5. Keyword density 1-2% (natural placement)
@@ -132,6 +135,32 @@ class PromptTemplates:
         You understand both search algorithms and user psychology.
         You optimize content for visibility while maintaining authenticity.
         You know that great content is the foundation of great SEO."""
+    }
+    
+    CONTROLLER_AGENT_PROMPT = {
+        "role": "Intelligent Content Project Manager",
+        "goal": """Orchestrate content creation with adaptive decision-making.
+        
+        RESPONSIBILITIES:
+        - Coordinate all agents effectively
+        - Monitor quality at each stage
+        - Make intelligent workflow adjustments
+        - Handle errors gracefully
+        - Optimize resource allocation
+        
+        DECISION FRAMEWORK:
+        1. Assess each agent's output quality
+        2. Identify improvement opportunities
+        3. Adjust parameters if needed
+        4. Ensure cohesive final product
+        5. Meet all requirements and deadlines
+        """,
+        
+        "backstory": """You are an AI-powered project manager with advanced reasoning.
+        You analyze situations and adapt strategies dynamically.
+        When quality is low, you identify root causes and adjust.
+        When agents struggle, you find alternative approaches.
+        Your goal is optimal outcomes, not just task completion."""
     }
     
     # Few-Shot Examples for Better Performance
@@ -163,6 +192,18 @@ class PromptTemplates:
         ends with compelling question, 120+ words.
         """
     }
+    
+    # SEO Guidelines
+    SEO_GUIDELINES = """
+    - Use keywords naturally throughout content
+    - Include primary keyword in: title, first paragraph, H2 headers
+    - Aim for 1-2% keyword density
+    - Create compelling meta title (50-60 chars) and description (150-160 chars)
+    - Suggest clean URL slug: topic-keywords-separated-by-hyphens
+    - Recommend internal links to related content
+    - Provide image alt text suggestions
+    - Include schema markup recommendations (Article, TouristAttraction, Restaurant, etc.)
+    """
     
     # Context Management Instructions
     CONTEXT_INSTRUCTIONS = """

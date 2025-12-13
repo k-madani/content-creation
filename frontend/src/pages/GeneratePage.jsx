@@ -22,11 +22,14 @@ export default function GeneratePage({ mode, onBack, onHome, onGenerate }) {
   const [isGeneratingTitles, setIsGeneratingTitles] = useState(false);
 
   const [isGenerating, setIsGenerating] = useState(false);
+  
+  // 🎨 UPDATED: Added 'images' stage
   const [progress, setProgress] = useState({
     research: { status: 'pending', progress: 0 },
     writing: { status: 'pending', progress: 0 },
     editing: { status: 'pending', progress: 0 },
-    seo: { status: 'pending', progress: 0 }
+    seo: { status: 'pending', progress: 0 },
+    images: { status: 'pending', progress: 0 }
   });
 
   // Check backend health on mount
@@ -83,12 +86,13 @@ export default function GeneratePage({ mode, onBack, onHome, onGenerate }) {
 
     setIsGenerating(true);
 
-    // Reset progress
+    // Reset progress (including images stage)
     setProgress({
       research: { status: 'pending', progress: 0 },
       writing: { status: 'pending', progress: 0 },
       editing: { status: 'pending', progress: 0 },
-      seo: { status: 'pending', progress: 0 }
+      seo: { status: 'pending', progress: 0 },
+      images: { status: 'pending', progress: 0 }
     });
 
     try {
@@ -486,7 +490,7 @@ export default function GeneratePage({ mode, onBack, onHome, onGenerate }) {
             </div>
 
             <p className="text-sm text-gray-500 text-center mt-8">
-              This usually takes about 45-60 seconds
+              {includeImages ? 'This usually takes about 60-90 seconds with images' : 'This usually takes about 45-60 seconds'}
             </p>
           </div>
         )}
