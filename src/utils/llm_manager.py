@@ -30,9 +30,8 @@ class LLMManager:
         self.groq_key = os.getenv("GROQ_API_KEY")
         self.ollama_url = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
         
-        self.gemini_model = os.getenv("GEMINI_MODEL", "gemini-1.5-flash")
+        self.gemini_model = os.getenv("GEMINI_MODEL", "gemini-2.0-flash")
         self.groq_model = os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")
-        self.ollama_model = os.getenv("OLLAMA_MODEL", "llama3.2:latest")
         
         self.max_retries = int(os.getenv("MAX_RETRIES", "3"))
         self.timeout = int(os.getenv("TIMEOUT_SECONDS", "30"))

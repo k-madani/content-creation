@@ -1,7 +1,9 @@
 """
-Content Creation System - Complete with Feedback Loop
+Content Creation System - Complete with Feedback Loop + Multimodal Integration
+FIXED: Added return statement in generate_single_attempt
 """
 import warnings
+import fix_signals
 warnings.filterwarnings("ignore", category=FutureWarning)
 warnings.filterwarnings("ignore", message=".*Python version.*")
 
@@ -15,7 +17,6 @@ from dotenv import load_dotenv
 from rich.console import Console
 from rich.prompt import Prompt, Confirm
 from rich.table import Table
-from rich.live import Live
 import time
 import re
 
@@ -24,6 +25,7 @@ from tasks.content_tasks import content_tasks
 from tools.research_tool import research_tool
 from tools.seo_optimizer import seo_optimizer
 from tools.tone_analyzer import tone_analyzer
+from tools.image_generator import ImageGenerator
 from utils.user_input import UserInputCollector
 from utils.progress_tracker import ContentProgressTracker
 from utils.quality_scorer import quality_scorer
@@ -74,45 +76,44 @@ def generate_single_attempt(config, attempt_num):
         agents=[research_agent, writer_agent, editor_agent, seo_agent],
         tasks=[research_task, writing_task, editing_task, seo_task],
         process=Process.sequential,
-        verbose=False  # KEY: No verbose output from CrewAI
+        verbose=False  
     )
     
     try:
-        console.print(f"[cyan]⏳ Generating (Attempt {attempt_num})...[/cyan]")
-        console.print("[dim]This takes approximately 90 seconds[/dim]\n")
+        console.print(f"\n[cyan]⏳ Generating (Attempt {attempt_num})...[/cyan]")
+        console.print("[dim]This takes approximately few minutes[/dim]\n")   
         
-        # Mark stages as they happen (simple prints, no live tables)
-        tracker.start_stage('research')
+        # Simple 1-line progress updates
+        console.print("[cyan]🔍 Research...[/cyan]", end=" ")
         
-        # Execute crew
+        # Execute crew (runs all agents)
         result = crew.kickoff()
         
-        # Mark all stages complete (crew runs them sequentially)
-        tracker.complete_stage('research')
-        tracker.complete_stage('writing')
-        tracker.complete_stage('editing')
-        tracker.complete_stage('seo')
+        # Simple completion messages
+        console.print("[green]✓[/green]")
+        console.print("[cyan]✍️  Writing...[/cyan]", end=" ")
+        console.print("[green]✓[/green]")
+        console.print("[cyan]✨ Editing...[/cyan]", end=" ")
+        console.print("[green]✓[/green]")
+        console.print("[cyan]🎯 SEO...[/cyan]", end=" ")
+        console.print("[green]✓[/green]\n")
         
-        # Show ONE summary table at the end
-        console.print("\n")
-        console.print(tracker.get_completion_summary())
-        console.print("\n")
-        
-        final_content = f"# {config['title']}\n\n{result}"
-        shared_memory.add_content_version(f'attempt_{attempt_num}', final_content)
-        
-        return final_content
-        
+        # CRITICAL FIX: Return the result!
+        return result
+
     except Exception as e:
         console.print(f"\n[red]✗ Failed: {str(e)[:100]}[/red]\n")
         shared_memory.log_error('generation_failure', str(e), f'Attempt {attempt_num} failed')
         return None
+
 
 def create_content_with_config(config: dict):
     """Generate content with feedback loop"""
     
     console.print("\n" + "="*60, style="bold")
     console.print("🚀 CONTENT GENERATION WITH FEEDBACK LOOP", style="bold cyan")
+    if config.get('include_images', False):
+        console.print("🎨 MULTIMODAL MODE: Text + Image Generation", style="bold magenta")
     console.print("="*60 + "\n", style="bold")
     
     shared_memory.store('user_preferences', config, 'System')
@@ -187,9 +188,8 @@ def create_content_with_config(config: dict):
                         config[key] = value
                         console.print(f"  → Word count: {value}")
                 console.print()
-            
-            console.print("[dim]⏳ Waiting 30s to avoid rate limits...[/dim]\n")
-            time.sleep(30)
+            console.print("[dim]⏳ Waiting 60s to avoid rate limits...[/dim]\n")
+            time.sleep(60)
     
     feedback_loop.display_history()
     
@@ -205,9 +205,9 @@ def create_content_with_config(config: dict):
     filepath = output_dir / f"{safe_filename}.md"
     
     with open(filepath, "w", encoding="utf-8") as f:
-        f.write(best_content)
+        f.write(str(best_content))
     
-    console.print("[green]✓[/green] Saved\n")
+    console.print(f"[green]✓[/green] Saved to: {filepath}\n")
     
     # Statistics
     console.print("\n[bold cyan]📈 FINAL STATISTICS:[/bold cyan]\n")
@@ -224,6 +224,12 @@ def create_content_with_config(config: dict):
     stats_table.add_row("📊 Diff", f"{word_diff:+d} ({word_diff/config['word_count']*100:+.1f}%)")
     stats_table.add_row("⭐ Score", f"{best_score}/100 ({best_quality_data['grade']})")
     stats_table.add_row("🔄 Attempts", f"{len(feedback_loop.attempt_history)}")
+    
+    # Add image stats if generated
+    if config.get('include_images', False):
+        images = shared_memory.retrieve('generated_images', [])
+        stats_table.add_row("🖼️  Images", f"{len(images)}/{config.get('image_count', 0)}")
+    
     stats_table.add_row("💾 File", str(filepath))
     stats_table.add_row("💰 Cost", "$0.00")
     
@@ -235,7 +241,7 @@ def create_content_with_config(config: dict):
     if best_score >= quality_threshold:
         console.print(f"[bold green]✅ Quality threshold met[/bold green]\n")
     else:
-        console.print(f"[bold yellow]⚠️ Best possible result[/bold yellow]\n")
+        console.print(f"[bold yellow]⚠️  Best possible result[/bold yellow]\n")
     
     return best_content
 
@@ -245,7 +251,7 @@ def main():
     
     console.print("\n[bold cyan]╔═══════════════════════════════════════╗[/bold cyan]")
     console.print("[bold cyan]║  AI CONTENT GENERATION SYSTEM         ║[/bold cyan]")
-    console.print("[bold cyan]║  Feedback Loop + Shared Memory        ║[/bold cyan]")
+    console.print("[bold cyan]║  Multimodal: Text + Image Generation  ║[/bold cyan]")
     console.print("[bold cyan]╚═══════════════════════════════════════╝[/bold cyan]\n")
     
     try:
@@ -277,7 +283,7 @@ def main():
             console.print("\n[red]❌ Failed[/red]\n")
     
     except KeyboardInterrupt:
-        console.print("\n\n[yellow]⚠️ Interrupted[/yellow]\n")
+        console.print("\n\n[yellow]⚠️  Interrupted[/yellow]\n")
     except Exception as e:
         console.print(f"\n[red]❌ Error: {str(e)}[/red]\n")
         import traceback

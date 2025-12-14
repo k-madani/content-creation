@@ -5,7 +5,7 @@ Wikipedia + DuckDuckGo with fallback strategies
 
 from crewai.tools import tool
 import wikipedia
-from duckduckgo_search import DDGS
+from ddgs import DDGS
 import time
 
 
