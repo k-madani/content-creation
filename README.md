@@ -4,7 +4,7 @@ Full-stack AI system using CrewAI + FastAPI + React for automated content creati
 
 ## Architecture
 
-![System Architecture](./docs/vrsion 2/content_system.png)
+![System Architecture](./docs/version%202/content_system.png)
 
 **Sequential Processing Rationale:**
 
