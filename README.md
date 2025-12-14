@@ -1,4 +1,4 @@
-# ContentForge - Multi-Agent Content Generation System
+# ContentFlow - Multi-Agent Content Generation System
 
 Full-stack AI system using CrewAI + FastAPI + React for automated content creation with real-time progress tracking. Generates publication-ready articles with SEO optimization in ~5 minutes at zero operational cost.
 
