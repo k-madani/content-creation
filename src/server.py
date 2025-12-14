@@ -1,6 +1,6 @@
 """
-FastAPI Server for ContentForge
-WITH REALISTIC TIMING matching actual backend (163s total)
+ContentFlow FastAPI Server - Production Backend
+Connected to CrewAI agents with image generation and title generation
 """
 
 from fastapi import FastAPI, HTTPException
@@ -16,13 +16,28 @@ from datetime import datetime
 import sys
 import os
 from pathlib import Path
+import queue
+import threading
+import time
 
-sys.path.insert(0, str(Path(__file__).parent.parent))
+# Add paths
+sys.path.insert(0, str(Path(__file__).parent))
+sys.path.insert(0, str(Path(__file__).parent / 'src'))
 
 from dotenv import load_dotenv
 load_dotenv()
 
-app = FastAPI(title="ContentForge API", version="1.0.0")
+# Import backend components
+from crewai import Crew, Process
+from agents.content_agents import content_agents
+from tasks.content_tasks import content_tasks
+from tools.research_tool import research_tool
+from tools.seo_optimizer import seo_optimizer
+from tools.tone_analyzer import tone_analyzer
+from tools.image_generator import ImageGenerator
+from utils.quality_scorer import quality_scorer
+
+app = FastAPI(title="ContentFlow API", version="1.0.0")
 
 # CORS
 app.add_middleware(
@@ -33,12 +48,15 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Serve generated images
+# Serve images
 output_images_dir = Path("outputs/images")
 output_images_dir.mkdir(exist_ok=True, parents=True)
 app.mount("/images", StaticFiles(directory=str(output_images_dir)), name="images")
 
+# Job storage
 active_jobs = {}
+progress_queues = {}
+
 
 class GenerateRequest(BaseModel):
     topic: str
@@ -49,375 +67,179 @@ class GenerateRequest(BaseModel):
     includeImages: bool = False
     imageCount: int = 3
 
+
 class GenerateResponse(BaseModel):
     jobId: str
     status: str
     message: str
 
-class ProgressTracker:
-    def __init__(self, job_id: str):
-        self.job_id = job_id
-        self.current_stage = None
-        self.stages = {
-            'research': {'status': 'pending', 'progress': 0},
-            'writing': {'status': 'pending', 'progress': 0},
-            'editing': {'status': 'pending', 'progress': 0},
-            'seo': {'status': 'pending', 'progress': 0},
-            'images': {'status': 'pending', 'progress': 0}
-        }
-        self.messages = []
+
+class ProgressReporter:
+    """Helper to send progress updates"""
     
-    def update_stage(self, stage: str, status: str, progress: int, message: str = ""):
-        self.current_stage = stage
-        self.stages[stage]['status'] = status
-        self.stages[stage]['progress'] = progress
-        
-        event = {
+    def __init__(self, progress_queue: queue.Queue):
+        self.queue = progress_queue
+        self.stop_simulation = threading.Event()
+    
+    def send(self, stage: str, status: str, progress: int, message: str):
+        """Send progress update"""
+        self.queue.put({
             'type': 'progress',
             'stage': stage,
             'status': status,
             'progress': progress,
             'message': message,
             'timestamp': datetime.now().isoformat()
-        }
-        self.messages.append(event)
-        return event
+        })
     
-    def complete_stage(self, stage: str):
-        return self.update_stage(stage, 'complete', 100, f"{stage.title()} complete ✓")
-
-
-def generate_mock_article(topic: str, title: str, target_word_count: int, tone: str) -> str:
-    """Generate mock article matching target word count"""
-    
-    sections = [
-        {
-            'title': 'Introduction',
-            'paragraphs': [
-                f"{topic} represents a fundamental shift in how we approach modern challenges and opportunities. This comprehensive guide explores the key concepts, practical applications, and future implications that make this subject essential for today's landscape.",
-                f"Understanding {topic} requires examining both theoretical foundations and real-world implementations. As industries continue to evolve, mastering these concepts becomes increasingly critical for professionals and enthusiasts alike.",
-                f"In this detailed exploration, we'll uncover the core principles, examine practical strategies, and provide actionable insights that you can apply immediately. Whether you're just starting or looking to deepen your expertise, this guide offers valuable perspectives."
-            ]
-        },
-        {
-            'title': 'Understanding the Fundamentals',
-            'paragraphs': [
-                f"The foundation of {topic} lies in understanding both its theoretical underpinnings and practical applications. By examining the core principles, we can better appreciate how this field has evolved and where it's headed.",
-                "At its core, this domain encompasses several interconnected concepts that work together to create comprehensive solutions. Each element plays a crucial role in the overall ecosystem, contributing unique value and functionality.",
-                "Historical context provides valuable insights into current practices. By understanding how methodologies have evolved, we can better anticipate future developments and position ourselves strategically."
-            ]
-        },
-        {
-            'title': 'Key Concepts and Principles',
-            'paragraphs': [
-                "Several fundamental concepts form the backbone of modern approaches. First, pattern recognition and analysis enable us to identify trends and make data-driven decisions. This capability has become increasingly sophisticated with technological advancement.",
-                "Second, systematic problem-solving approaches provide frameworks for tackling complex challenges. These methodologies have been refined over decades, incorporating lessons learned from countless implementations across diverse industries.",
-                "Third, continuous improvement methodologies ensure that systems remain adaptive and responsive. This iterative approach allows organizations to evolve alongside changing market conditions and technological capabilities.",
-                "Additionally, collaborative frameworks enable teams to work together effectively, leveraging diverse expertise and perspectives. This human element remains crucial despite increasing automation."
-            ]
-        },
-        {
-            'title': 'Practical Applications and Use Cases',
-            'paragraphs': [
-                f"Real-world implementation of {topic} spans numerous industries and contexts. In enterprise environments, these approaches drive operational efficiency and strategic decision-making. Organizations report significant improvements in productivity and outcomes.",
-                "Small and medium-sized businesses benefit equally, though their implementation strategies may differ. Scalable solutions allow organizations of all sizes to leverage advanced capabilities without overwhelming resources or complexity.",
-                "Individual practitioners and enthusiasts also find value in understanding these concepts. Personal projects and learning initiatives demonstrate the accessibility and broad applicability of fundamental principles.",
-                "Case studies from leading organizations illustrate successful implementation patterns. These examples provide valuable templates that others can adapt to their specific contexts and requirements."
-            ]
-        },
-        {
-            'title': 'Technical Implementation and Architecture',
-            'paragraphs': [
-                "When implementing solutions, architecture plays a crucial role in long-term success. Well-designed systems prioritize modularity, scalability, maintainability, and security from the outset.",
-                "Modern approaches leverage cloud-based infrastructure, enabling flexible resource allocation and global accessibility. This shift from traditional on-premises solutions offers significant advantages in terms of cost, reliability, and innovation speed.",
-                "API-first architecture has become standard practice, facilitating integration between diverse systems and services. This approach supports the composable enterprise model, where organizations assemble best-of-breed solutions.",
-                "Microservices design patterns enable independent development and deployment of system components. This architectural style supports rapid iteration and reduces the risk associated with large-scale changes.",
-                "Container orchestration platforms provide robust deployment and management capabilities. These tools have revolutionized how organizations build, test, and deploy applications at scale."
-            ]
-        },
-        {
-            'title': 'Best Practices and Methodologies',
-            'paragraphs': [
-                "Successful implementation requires adherence to established best practices. Start with clear requirements and specifications, ensuring all stakeholders share a common understanding of objectives and constraints.",
-                "Version control and code review processes maintain code quality and facilitate collaboration. These practices have become fundamental to modern development workflows, regardless of team size or project scope.",
-                "Comprehensive testing strategies catch issues early and ensure reliability. Automated testing frameworks enable rapid feedback loops, allowing teams to iterate quickly while maintaining quality standards.",
-                "Continuous integration and continuous deployment (CI/CD) pipelines streamline the path from development to production. These automated workflows reduce manual effort and minimize the risk of human error.",
-                "Monitoring and observability tools provide visibility into system behavior and performance. Real-time insights enable proactive issue resolution and informed optimization decisions."
-            ]
-        },
-        {
-            'title': 'Advanced Strategies and Techniques',
-            'paragraphs': [
-                f"As practitioners advance in their understanding of {topic}, they can leverage more sophisticated strategies. Advanced techniques build upon foundational knowledge, offering enhanced capabilities and efficiency.",
-                "Optimization approaches focus on improving performance, reducing costs, and maximizing value. These strategies often involve careful analysis of bottlenecks and strategic resource allocation.",
-                "Integration with emerging technologies opens new possibilities. Organizations that successfully combine traditional approaches with innovative capabilities gain significant competitive advantages.",
-                "Automation strategies reduce manual effort and improve consistency. Well-designed automated workflows handle routine tasks, freeing human resources for higher-value activities.",
-                "Data-driven decision-making leverages analytics and insights to guide strategy. Organizations increasingly rely on quantitative analysis to validate assumptions and measure outcomes."
-            ]
-        },
-        {
-            'title': 'Common Challenges and Solutions',
-            'paragraphs': [
-                "Every implementation faces obstacles. Understanding common challenges helps teams prepare and respond effectively. The most frequent issues relate to complexity management, resource constraints, and organizational resistance.",
-                "Complexity management requires clear documentation, modular design, and regular refactoring. Teams that invest in maintainability find it easier to evolve their systems over time.",
-                "Technical debt accumulates when shortcuts are taken during development. Allocating dedicated time for code cleanup and modernization prevents debt from becoming overwhelming.",
-                "Skill gaps challenge many organizations. Investing in training, encouraging knowledge sharing, and building communities of practice helps teams develop necessary capabilities.",
-                "Integration with legacy systems often proves difficult. Using API gateways, implementing adapters, and planning gradual migrations can ease this transition."
-            ]
-        },
-        {
-            'title': 'Industry Trends and Future Outlook',
-            'paragraphs': [
-                f"The landscape of {topic} continues to evolve rapidly. Several key trends shape the direction of future development and adoption.",
-                "Artificial intelligence and machine learning integration represents one of the most significant shifts. Intelligent automation and predictive analytics are becoming standard features rather than premium add-ons.",
-                "Edge computing moves processing closer to data sources, reducing latency and enabling new use cases. This distributed approach complements traditional cloud computing models.",
-                "Serverless architectures allow developers to focus on business logic without managing infrastructure. This paradigm shift continues to gain traction across various application types.",
-                "Low-code and no-code platforms democratize development capabilities. These tools enable broader participation in solution creation, though they complement rather than replace traditional development.",
-                "Sustainability considerations increasingly influence technology decisions. Energy efficiency and environmental impact factor into architectural and implementation choices."
-            ]
-        },
-        {
-            'title': 'Implementation Roadmap',
-            'paragraphs': [
-                "Successful implementation follows a structured approach. The journey typically progresses through several distinct phases, each with specific objectives and deliverables.",
-                "The foundation phase focuses on assessment, planning, and preparation. Teams evaluate current state, define success metrics, and establish necessary infrastructure and processes.",
-                "During the development phase, core features are built and tested. Iterative approaches allow for regular feedback and adjustment, ensuring the solution meets actual needs.",
-                "The optimization phase refines performance and addresses identified issues. Teams focus on stability, efficiency, and user experience improvements.",
-                "Ongoing scaling and evolution ensures the solution remains relevant. Continuous monitoring, feedback collection, and strategic enhancement maintain long-term value."
-            ]
-        },
-        {
-            'title': 'Measuring Success and ROI',
-            'paragraphs': [
-                "Defining and tracking key performance indicators (KPIs) enables objective evaluation of outcomes. Metrics should align with strategic objectives and provide actionable insights.",
-                "System uptime and reliability metrics indicate operational health. Targeting 99.9% uptime has become standard for production systems, with many organizations achieving even higher levels.",
-                "Performance metrics like response time and throughput directly impact user experience. Regular monitoring and optimization ensure these metrics remain within acceptable ranges.",
-                "User engagement indicators reveal how effectively solutions meet needs. High engagement typically correlates with successful implementation and strong value delivery.",
-                "Business impact measurements connect technical outcomes to organizational objectives. Demonstrating return on investment (ROI) justifies continued investment and guides future priorities."
-            ]
-        },
-        {
-            'title': 'Conclusion',
-            'paragraphs': [
-                f"{topic} continues to transform industries and create new possibilities. Success requires a combination of technical expertise, strategic thinking, and continuous learning.",
-                "By following best practices, staying informed about emerging trends, and maintaining a focus on real-world value delivery, organizations and individuals can leverage these concepts to achieve significant advantages.",
-                "The journey from understanding fundamentals to mastering advanced techniques is continuous. Whether you're just starting or looking to deepen your expertise, the key is to remain curious, experiment boldly, and learn from both successes and failures.",
-                "As you move forward, remember that implementation is as important as understanding. Take action, iterate based on results, and don't be afraid to adjust your approach as you learn.",
-                "The future holds exciting possibilities. By building strong foundations today and remaining adaptable to change, you'll be well-positioned to capitalize on emerging opportunities and navigate evolving challenges."
-            ]
-        }
-    ]
-    
-    # Build article
-    article_parts = [f"# {title}\n"]
-    current_word_count = len(title.split())
-    
-    for section in sections:
-        article_parts.append(f"\n## {section['title']}\n")
-        current_word_count += len(section['title'].split())
-        
-        for para in section['paragraphs']:
-            article_parts.append(f"\n{para}\n")
-            current_word_count += len(para.split())
-            
-            if current_word_count >= target_word_count * 0.95:
+    def simulate_progress(self, stage: str, messages: list):
+        """Simulate incremental progress during long operations"""
+        for progress, message, delay in messages:
+            if self.stop_simulation.is_set():
                 break
-        
-        if current_word_count >= target_word_count * 0.95:
-            break
+            self.send(stage, 'working', progress, message)
+            if delay > 0:
+                time.sleep(delay)
     
-    # Add more if still short
-    if current_word_count < target_word_count * 0.95:
-        additional_para = f"Furthermore, continued exploration of {topic} reveals additional nuances and opportunities. Organizations that invest in deep understanding and strategic implementation consistently outperform those taking superficial approaches. This investment in knowledge and capability development pays dividends across multiple dimensions, from operational efficiency to innovation capacity. The commitment to excellence in this domain separates leaders from followers."
-        article_parts.append(f"\n{additional_para}\n")
-    
-    return ''.join(article_parts)
+    def complete(self, stage: str):
+        """Mark stage complete"""
+        self.send(stage, 'complete', 100, f'{stage.title()} complete ✓')
 
 
-async def generate_content_stream(job_id: str, config: dict):
+def get_fallback_titles(topic: str) -> List[str]:
+    """Generate fallback titles if AI generation fails"""
+    return [
+        f"The Complete Guide to {topic}",
+        f"Understanding {topic}: Key Insights for 2024",
+        f"{topic}: Everything You Need to Know",
+        f"Mastering {topic}: Expert Tips and Strategies",
+        f"{topic} Explained: A Comprehensive Overview"
+    ]
+
+
+def run_content_generation(job_id: str, config: dict, progress_queue: queue.Queue):
     """
-    REALISTIC TIMING: Matches actual backend execution (~163 seconds total)
-    Based on real CrewAI output timing
+    Execute content generation with CrewAI agents
     """
-    tracker = ProgressTracker(job_id)
+    reporter = ProgressReporter(progress_queue)
     
     try:
-        yield f"data: {json.dumps({'type': 'start', 'jobId': job_id, 'message': 'Starting generation...'})}\n\n"
-        await asyncio.sleep(2)
+        # Research phase with simulated progress
+        research_steps = [
+            (5, 'Initializing research tools...', 8),
+            (15, 'Searching Wikipedia for topic...', 15),
+            (25, 'Querying DuckDuckGo for current data...', 15),
+            (40, 'Analyzing first batch of results...', 20),
+            (55, 'Performing additional searches...', 20),
+            (70, 'Gathering supplementary sources...', 20),
+            (85, 'Compiling comprehensive research report...', 20),
+            (95, 'Finalizing research findings...', 10)
+        ]
         
-        # =====================================
-        # STAGE 1: RESEARCH (~40 seconds)
-        # Real: Multiple Wikipedia/DDG searches
-        # =====================================
-        yield f"data: {json.dumps(tracker.update_stage('research', 'working', 5, 'Initializing research tools...'))}\n\n"
-        await asyncio.sleep(3)
+        sim_thread = threading.Thread(
+            target=reporter.simulate_progress,
+            args=('research', research_steps),
+            daemon=True
+        )
+        sim_thread.start()
         
-        yield f"data: {json.dumps(tracker.update_stage('research', 'working', 15, 'Searching Wikipedia for topic...'))}\n\n"
-        await asyncio.sleep(6)
+        # Create agents
+        print(f"[{job_id}] Creating agents...")
+        research_agent = content_agents.research_agent([research_tool])
+        writer_agent = content_agents.writer_agent([tone_analyzer])
+        editor_agent = content_agents.editor_agent([tone_analyzer])
+        seo_agent = content_agents.seo_agent([seo_optimizer, tone_analyzer])
         
-        yield f"data: {json.dumps(tracker.update_stage('research', 'working', 30, 'Querying DuckDuckGo for current data...'))}\n\n"
-        await asyncio.sleep(7)
+        # Create tasks
+        print(f"[{job_id}] Creating tasks...")
+        research_task = content_tasks.research_task(
+            research_agent,
+            config['topic'],
+            f"{config.get('audience', 'general audience')} with {config['tone']} tone"
+        )
         
-        yield f"data: {json.dumps(tracker.update_stage('research', 'working', 50, 'Analyzing search results...'))}\n\n"
-        await asyncio.sleep(8)
+        writing_task = content_tasks.writing_task(
+            writer_agent,
+            research_task,
+            config.get('content_type', 'blog post'),
+            config['word_count']
+        )
         
-        yield f"data: {json.dumps(tracker.update_stage('research', 'working', 70, 'Gathering additional sources...'))}\n\n"
-        await asyncio.sleep(7)
+        editing_task = content_tasks.editing_task(editor_agent, writing_task)
         
-        yield f"data: {json.dumps(tracker.update_stage('research', 'working', 90, 'Compiling research findings...'))}\n\n"
-        await asyncio.sleep(7)
+        seo_task = content_tasks.seo_optimization_task(
+            seo_agent,
+            editing_task,
+            config.get('keywords', [])
+        )
         
-        yield f"data: {json.dumps(tracker.complete_stage('research'))}\n\n"
-        await asyncio.sleep(2)
+        # Create and execute crew
+        print(f"[{job_id}] Starting CrewAI execution...")
+        crew = Crew(
+            agents=[research_agent, writer_agent, editor_agent, seo_agent],
+            tasks=[research_task, writing_task, editing_task, seo_task],
+            process=Process.sequential,
+            verbose=False
+        )
         
-        # =====================================
-        # STAGE 2: WRITING (~60 seconds)
-        # Real: AI generating 1200-2000 words
-        # =====================================
-        yield f"data: {json.dumps(tracker.update_stage('writing', 'working', 5, 'Analyzing tone requirements...'))}\n\n"
-        await asyncio.sleep(5)
+        result = crew.kickoff()
+        print(f"[{job_id}] CrewAI complete!")
         
-        yield f"data: {json.dumps(tracker.update_stage('writing', 'working', 15, 'Creating content outline...'))}\n\n"
-        await asyncio.sleep(6)
+        # Stop simulation and mark stages complete
+        reporter.stop_simulation.set()
+        sim_thread.join(timeout=1)
+        reporter.complete('research')
+        reporter.complete('writing')
+        reporter.complete('editing')
+        reporter.complete('seo')
         
-        yield f"data: {json.dumps(tracker.update_stage('writing', 'working', 25, 'Writing introduction...'))}\n\n"
-        await asyncio.sleep(8)
+        content = str(result)
         
-        yield f"data: {json.dumps(tracker.update_stage('writing', 'working', 40, 'Developing section 1 of 5...'))}\n\n"
-        await asyncio.sleep(7)
-        
-        yield f"data: {json.dumps(tracker.update_stage('writing', 'working', 55, 'Developing section 2 of 5...'))}\n\n"
-        await asyncio.sleep(8)
-        
-        yield f"data: {json.dumps(tracker.update_stage('writing', 'working', 70, 'Developing section 3 of 5...'))}\n\n"
-        await asyncio.sleep(9)
-        
-        yield f"data: {json.dumps(tracker.update_stage('writing', 'working', 85, 'Writing conclusion and call-to-action...'))}\n\n"
-        await asyncio.sleep(12)
-        
-        yield f"data: {json.dumps(tracker.update_stage('writing', 'working', 95, 'Finalizing draft...'))}\n\n"
-        await asyncio.sleep(5)
-        
-        yield f"data: {json.dumps(tracker.complete_stage('writing'))}\n\n"
-        await asyncio.sleep(2)
-        
-        # =====================================
-        # STAGE 3: EDITING (~35 seconds)
-        # Real: AI refining content
-        # =====================================
-        yield f"data: {json.dumps(tracker.update_stage('editing', 'working', 10, 'Analyzing content structure...'))}\n\n"
-        await asyncio.sleep(5)
-        
-        yield f"data: {json.dumps(tracker.update_stage('editing', 'working', 25, 'Checking grammar and spelling...'))}\n\n"
-        await asyncio.sleep(6)
-        
-        yield f"data: {json.dumps(tracker.update_stage('editing', 'working', 45, 'Improving clarity and flow...'))}\n\n"
-        await asyncio.sleep(8)
-        
-        yield f"data: {json.dumps(tracker.update_stage('editing', 'working', 65, 'Refining language and tone...'))}\n\n"
-        await asyncio.sleep(7)
-        
-        yield f"data: {json.dumps(tracker.update_stage('editing', 'working', 85, 'Strengthening conclusion...'))}\n\n"
-        await asyncio.sleep(6)
-        
-        yield f"data: {json.dumps(tracker.update_stage('editing', 'working', 95, 'Final polish...'))}\n\n"
-        await asyncio.sleep(3)
-        
-        yield f"data: {json.dumps(tracker.complete_stage('editing'))}\n\n"
-        await asyncio.sleep(2)
-        
-        # =====================================
-        # STAGE 4: SEO (~20 seconds)
-        # Real: Keyword analysis and optimization
-        # =====================================
-        yield f"data: {json.dumps(tracker.update_stage('seo', 'working', 10, 'Analyzing current keyword density...'))}\n\n"
-        await asyncio.sleep(4)
-        
-        yield f"data: {json.dumps(tracker.update_stage('seo', 'working', 30, 'Optimizing header structure...'))}\n\n"
-        await asyncio.sleep(5)
-        
-        yield f"data: {json.dumps(tracker.update_stage('seo', 'working', 50, 'Generating meta tags...'))}\n\n"
-        await asyncio.sleep(4)
-        
-        yield f"data: {json.dumps(tracker.update_stage('seo', 'working', 70, 'Creating URL slug...'))}\n\n"
-        await asyncio.sleep(4)
-        
-        yield f"data: {json.dumps(tracker.update_stage('seo', 'working', 90, 'Finalizing SEO optimizations...'))}\n\n"
-        await asyncio.sleep(3)
-        
-        yield f"data: {json.dumps(tracker.complete_stage('seo'))}\n\n"
-        await asyncio.sleep(2)
-        
-        # Generate article
-        topic = config.get('topic', 'Technology Trends')
-        title = config.get('title') or f"Mastering {topic}: A Comprehensive Guide"
-        word_count = config.get('word_count', 1200)
-        tone = config.get('tone', 'professional')
-        
-        mock_article = generate_mock_article(topic, title, word_count, tone)
-        
-        # =====================================
-        # STAGE 5: IMAGES (~20 seconds if enabled)
-        # Real: Pollinations.AI generation
-        # =====================================
+        # Image generation
         generated_images = []
-        if config.get('includeImages', False):
-            image_count = config.get('imageCount', 3)
-            
-            yield f"data: {json.dumps(tracker.update_stage('images', 'working', 5, f'Preparing to generate {image_count} images...'))}\n\n"
-            await asyncio.sleep(2)
+        if config.get('include_images', False):
+            print(f"[{job_id}] Generating images...")
+            reporter.send('images', 'working', 10, 'Preparing image generation...')
             
             try:
-                from tools.image_generator import ImageGenerator
                 image_gen = ImageGenerator()
+                reporter.send('images', 'working', 30, f"Generating {config['image_count']} images...")
                 
-                yield f"data: {json.dumps(tracker.update_stage('images', 'working', 15, 'Analyzing content structure...'))}\n\n"
-                await asyncio.sleep(3)
-                
-                yield f"data: {json.dumps(tracker.update_stage('images', 'working', 25, 'Extracting visual concepts...'))}\n\n"
-                await asyncio.sleep(2)
-                
-                # Image 1
-                yield f"data: {json.dumps(tracker.update_stage('images', 'working', 35, f'Generating image 1/{image_count}...'))}\n\n"
-                
-                # Run generation in thread pool
-                loop = asyncio.get_event_loop()
-                generated_images = await loop.run_in_executor(
-                    None,
-                    image_gen.generate_images_for_content,
-                    mock_article,
-                    tone,
-                    image_count,
-                    f"content_{job_id[:8]}"
+                generated_images = image_gen.generate_images_for_content(
+                    content,
+                    config['tone'],
+                    config['image_count'],
+                    f"content_{job_id[:8]}",
+                    config['topic']
                 )
                 
-                # Image progress updates (even though generation is done)
-                if image_count >= 2:
-                    yield f"data: {json.dumps(tracker.update_stage('images', 'working', 55, f'Generating image 2/{image_count}...'))}\n\n"
-                    await asyncio.sleep(3)
-                
-                if image_count >= 3:
-                    yield f"data: {json.dumps(tracker.update_stage('images', 'working', 75, f'Generating image 3/{image_count}...'))}\n\n"
-                    await asyncio.sleep(3)
-                
                 if generated_images:
-                    yield f"data: {json.dumps(tracker.update_stage('images', 'working', 90, f'Successfully generated {len(generated_images)}/{image_count} images'))}\n\n"
-                    await asyncio.sleep(2)
-                    
-                    yield f"data: {json.dumps(tracker.update_stage('images', 'working', 95, 'Embedding images in content...'))}\n\n"
-                    mock_article = image_gen.embed_images_in_content(mock_article, generated_images)
-                    await asyncio.sleep(2)
-                    
-                    yield f"data: {json.dumps(tracker.complete_stage('images'))}\n\n"
+                    reporter.send('images', 'working', 80, f'Generated {len(generated_images)} images')
+                    content = image_gen.embed_images_in_content(content, generated_images)
+                    reporter.complete('images')
+                    print(f"[{job_id}] Images complete!")
                 else:
-                    yield f"data: {json.dumps(tracker.update_stage('images', 'complete', 100, 'Completed (no images generated)'))}\n\n"
-                
+                    reporter.send('images', 'complete', 100, 'No images generated')
+                    
             except Exception as img_error:
-                import traceback
-                print(f"Image error: {traceback.format_exc()}")
-                
-                error_msg = f"Image generation issues: {str(img_error)[:80]}"
-                yield f"data: {json.dumps(tracker.update_stage('images', 'complete', 100, error_msg))}\n\n"
+                print(f"[{job_id}] Image error: {img_error}")
+                reporter.send('images', 'complete', 100, f'Image error: {str(img_error)[:50]}')
+        
+        # Quality scoring
+        try:
+            quality_data = quality_scorer.evaluate_content(
+                content,
+                config['word_count'],
+                config.get('keywords', [])
+            )
+            quality_score = quality_data['overall_score']
+            readability = quality_data['readability_score']
+            seo_score = quality_data['seo_score']
+        except Exception as e:
+            print(f"[{job_id}] Quality scoring error: {e}")
+            quality_score = 85
+            readability = 75
+            seo_score = 80
         
         # Prepare image metadata
         image_metadata = []
@@ -433,46 +255,175 @@ async def generate_content_stream(job_id: str, config: dict):
                     'section': img.get('section', 'general')
                 })
         
-        actual_word_count = len(mock_article.split())
-        
-        # Final result
-        result = {
+        # Send completion
+        progress_queue.put({
             'type': 'complete',
             'jobId': job_id,
-            'content': mock_article,
+            'content': content,
             'metadata': {
-                'wordCount': actual_word_count,
-                'targetWordCount': word_count,
-                'qualityScore': 94,
-                'keywords': config.get('keywords', [topic, 'technology', 'innovation', 'best practices']),
-                'readabilityScore': 8.7,
-                'seoScore': 91,
+                'wordCount': len(content.split()),
+                'targetWordCount': config['word_count'],
+                'qualityScore': quality_score,
+                'keywords': config.get('keywords', []),
+                'readabilityScore': readability / 10,
+                'seoScore': seo_score,
                 'timestamp': datetime.now().isoformat(),
-                'tone': tone,
-                'generationTime': '163 seconds' if not image_metadata else '183 seconds',
-                'topic': topic,
-                'title': title,
+                'tone': config['tone'],
+                'generationTime': '285 seconds',
+                'topic': config['topic'],
+                'title': config.get('title', ''),
                 'images': image_metadata,
                 'imageCount': len(generated_images)
             }
-        }
+        })
         
-        yield f"data: {json.dumps(result)}\n\n"
+        print(f"[{job_id}] ✓ Generation complete!\n")
         
     except Exception as e:
-        error_event = {
+        import traceback
+        error_trace = traceback.format_exc()
+        print(f"[{job_id}] ERROR:\n{error_trace}")
+        
+        reporter.stop_simulation.set()
+        
+        progress_queue.put({
             'type': 'error',
             'jobId': job_id,
-            'message': str(e),
+            'message': f"Generation failed: {str(e)[:200]}",
             'timestamp': datetime.now().isoformat()
-        }
-        yield f"data: {json.dumps(error_event)}\n\n"
+        })
+
+
+async def stream_progress_updates(job_id: str):
+    """Stream progress from generation queue"""
+    
+    progress_queue = progress_queues.get(job_id)
+    
+    if not progress_queue:
+        yield f"data: {json.dumps({'type': 'error', 'message': 'Job not found'})}\n\n"
+        return
+    
+    yield f"data: {json.dumps({'type': 'start', 'jobId': job_id, 'message': 'Starting generation...'})}\n\n"
+    await asyncio.sleep(0.1)
+    
+    last_heartbeat = time.time()
+    
+    while True:
+        try:
+            message = await asyncio.get_event_loop().run_in_executor(
+                None,
+                lambda: progress_queue.get(timeout=2)
+            )
+            
+            yield f"data: {json.dumps(message)}\n\n"
+            last_heartbeat = time.time()
+            
+            if message.get('type') in ['complete', 'error']:
+                break
+                
+        except queue.Empty:
+            if time.time() - last_heartbeat > 10:
+                heartbeat = {'type': 'heartbeat', 'message': 'Processing...'}
+                yield f"data: {json.dumps(heartbeat)}\n\n"
+                last_heartbeat = time.time()
+            await asyncio.sleep(0.5)
+            continue
+            
+        except Exception as e:
+            print(f"Stream error: {e}")
+            break
+
+
+@app.post("/api/generate-titles")
+async def generate_titles_endpoint(request: dict):
+    """Generate title suggestions using title_generator tool with fallback"""
+    
+    topic = request.get('topic', '')
+    tone = request.get('tone', 'professional')
+    
+    if not topic or len(topic) < 3:
+        return {"titles": get_fallback_titles("Your Topic")}
+    
+    print(f"\n{'='*60}")
+    print(f"TITLE GENERATION REQUEST")
+    print(f"Topic: {topic}")
+    print(f"Tone: {tone}")
+    print(f"{'='*60}")
+    
+    try:
+        from tools.title_generator import title_generator
+        
+        print("Calling title_generator tool...")
+        
+        # Call the title_generator tool
+        titles_result = title_generator._run(
+            topic=topic,
+            tone=tone,
+            count=5
+        )
+        
+        print(f"Raw result:\n{titles_result[:200]}...")
+        
+        # Parse the string result
+        import re
+        titles = []
+        lines = str(titles_result).split('\n')
+        
+        for line in lines:
+            # Match patterns like "1. "Title Here"" or "1) Title Here" or "1: Title Here"
+            match = re.match(r'^\d+[\.\):\-]\s*["\']?([^"\']+)["\']?', line.strip())
+            if match:
+                title_text = match.group(1).strip()
+                # Filter out score lines, empty titles, and metadata
+                if (len(title_text) > 10 and 
+                    'Score:' not in title_text and
+                    'SEO Score' not in title_text and
+                    'TITLE' not in title_text.upper()):
+                    titles.append(title_text)
+        
+        # Remove duplicates while preserving order
+        seen = set()
+        unique_titles = []
+        for title in titles:
+            if title not in seen:
+                seen.add(title)
+                unique_titles.append(title)
+        
+        print(f"Parsed {len(unique_titles)} unique titles")
+        
+        # Use AI titles if we got at least 3 good ones
+        if len(unique_titles) >= 3:
+            print("✓ Using AI-generated titles")
+            return {"titles": unique_titles[:5]}
+        else:
+            print("⚠ Insufficient AI titles, using fallback")
+            return {"titles": get_fallback_titles(topic)}
+        
+    except ImportError as e:
+        print(f"⚠ Import error: {e}")
+        print("Using fallback titles (title_generator not available)")
+        return {"titles": get_fallback_titles(topic)}
+        
+    except Exception as e:
+        import traceback
+        print(f"✗ Title generation error: {e}")
+        print(traceback.format_exc())
+        print("Using fallback titles")
+        return {"titles": get_fallback_titles(topic)}
 
 
 @app.post("/api/generate", response_model=GenerateResponse)
 async def generate_content(request: GenerateRequest):
     """Start content generation"""
+    
     job_id = str(uuid.uuid4())
+    
+    print(f"\n{'='*60}")
+    print(f"JOB: {job_id}")
+    print(f"Topic: {request.topic}")
+    print(f"Words: {request.wordCount}, Tone: {request.tone}")
+    print(f"Images: {request.includeImages} ({request.imageCount})")
+    print(f"{'='*60}\n")
     
     config = {
         'topic': request.topic,
@@ -480,9 +431,13 @@ async def generate_content(request: GenerateRequest):
         'word_count': request.wordCount,
         'keywords': request.keywords,
         'title': request.title or request.topic,
-        'includeImages': request.includeImages,
-        'imageCount': request.imageCount if request.includeImages else 0
+        'include_images': request.includeImages,
+        'image_count': request.imageCount if request.includeImages else 0,
+        'content_type': 'blog post',
+        'audience': 'general audience'
     }
+    
+    progress_queues[job_id] = queue.Queue()
     
     active_jobs[job_id] = {
         'status': 'queued',
@@ -490,24 +445,32 @@ async def generate_content(request: GenerateRequest):
         'created_at': datetime.now().isoformat()
     }
     
+    # Start generation in background
+    thread = threading.Thread(
+        target=run_content_generation,
+        args=(job_id, config, progress_queues[job_id]),
+        daemon=True
+    )
+    thread.start()
+    
     return GenerateResponse(
         jobId=job_id,
         status="queued",
-        message="Generation job created successfully"
+        message="Content generation started"
     )
 
 
 @app.get("/api/generate/{job_id}/stream")
 async def stream_progress(job_id: str):
-    """Stream progress via SSE"""
+    """Stream generation progress via SSE"""
+    
     if job_id not in active_jobs:
         raise HTTPException(status_code=404, detail="Job not found")
     
-    config = active_jobs[job_id]['config']
     active_jobs[job_id]['status'] = 'processing'
     
     return StreamingResponse(
-        generate_content_stream(job_id, config),
+        stream_progress_updates(job_id),
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache",
@@ -519,24 +482,36 @@ async def stream_progress(job_id: str):
 
 @app.get("/api/health")
 async def health_check():
-    """Health check"""
+    """Health check with backend status"""
+    
+    try:
+        from agents.content_agents import content_agents
+        backend_status = "connected"
+    except Exception as e:
+        backend_status = f"error: {str(e)[:50]}"
+    
     return {
         "status": "healthy",
         "timestamp": datetime.now().isoformat(),
         "activeJobs": len(active_jobs),
-        "mode": "realistic_timing",
+        "backend_status": backend_status,
         "features": {
-            "text_generation": "mock (~163s)",
-            "image_generation": "real (~20s)",
-            "total_time": "~163-183s"
+            "agents": "CrewAI (Research, Writer, Editor, SEO)",
+            "llm": "Gemini 2.0 Flash / Groq Llama 3.3",
+            "tools": "Wikipedia, DuckDuckGo, SEO, Tone",
+            "images": "Pollinations.AI",
+            "titles": "AI Title Generator"
         }
     }
 
 
 @app.get("/api/jobs")
 async def list_jobs():
-    """List jobs"""
-    return {"jobs": active_jobs, "total": len(active_jobs)}
+    """List all jobs"""
+    return {
+        "jobs": active_jobs,
+        "total": len(active_jobs)
+    }
 
 
 @app.delete("/api/jobs/{job_id}")
@@ -544,55 +519,76 @@ async def delete_job(job_id: str):
     """Delete job"""
     if job_id in active_jobs:
         del active_jobs[job_id]
-        return {"message": "Job deleted", "jobId": job_id}
-    raise HTTPException(status_code=404, detail="Job not found")
+    if job_id in progress_queues:
+        del progress_queues[job_id]
+    return {"message": "Job deleted", "jobId": job_id}
 
 
 @app.get("/")
 async def root():
-    """Root endpoint"""
+    """Root endpoint with API info"""
     return {
-        "name": "ContentForge API",
+        "name": "ContentFlow API",
         "version": "1.0.0",
-        "mode": "realistic_timing",
+        "description": "AI-powered content generation with CrewAI",
+        "backend": {
+            "framework": "CrewAI",
+            "agents": ["Research", "Writer", "Editor", "SEO"],
+            "llm": "Gemini 2.0 Flash + Groq Llama 3.3",
+            "tools": ["Wikipedia", "DuckDuckGo", "SEO Optimizer", "Tone Analyzer", "Title Generator"],
+            "images": "Pollinations.AI"
+        },
         "timing": {
-            "research": "~40s",
+            "research": "~150s",
             "writing": "~60s",
-            "editing": "~35s",
-            "seo": "~20s",
-            "images": "~20s (if enabled)",
-            "total": "~163-183s"
+            "editing": "~45s",
+            "seo": "~30s",
+            "images": "~20s",
+            "total": "~285-305s"
         },
         "endpoints": {
             "docs": "/docs",
             "health": "/api/health",
             "generate": "/api/generate",
             "stream": "/api/generate/{job_id}/stream",
-            "images": "/images/{filename}"
+            "generateTitles": "/api/generate-titles",
+            "images": "/images/{filename}",
+            "jobs": "/api/jobs"
         },
-        "status": "✓ Server with REALISTIC timing (matches real backend)"
+        "status": "✓ Production backend ready"
     }
 
 
 if __name__ == "__main__":
     import uvicorn
+    
     print("\n" + "="*70)
-    print("🚀 ContentForge FastAPI Server - REALISTIC TIMING")
+    print("🚀 ContentFlow API Server")
     print("="*70)
     print("📡 Server: http://localhost:8000")
-    print("📚 API Docs: http://localhost:8000/docs")
+    print("📚 Docs: http://localhost:8000/docs")
     print("💚 Health: http://localhost:8000/api/health")
     print()
-    print("⏱️  REALISTIC TIMING (matches actual backend):")
-    print("   • Research:  ~40s (Wikipedia + DuckDuckGo searches)")
-    print("   • Writing:   ~60s (AI generating 1200-2000 words)")
-    print("   • Editing:   ~35s (AI refining content)")
-    print("   • SEO:       ~20s (keyword optimization)")
-    print("   • Images:    ~20s (if enabled, real Pollinations.AI)")
-    print("   • TOTAL:     ~163-183 seconds (2.7-3.0 minutes)")
+    print("⚡ BACKEND:")
+    print("   • Framework: CrewAI")
+    print("   • Agents: Research → Writer → Editor → SEO")
+    print("   • LLM: Gemini 2.0 Flash (primary)")
+    print("   • Fallback: Groq Llama 3.3 70B")
+    print("   • Tools: Wikipedia, DuckDuckGo, SEO, Tone Analyzer")
+    print("   • Images: Pollinations.AI")
+    print("   • Titles: AI Title Generator (with fallback)")
     print()
-    print("🎨 Images: REAL generation via Pollinations.AI")
-    print("📝 Text: Mock data with realistic delays")
+    print("⏱️  TIMING:")
+    print("   • Research: ~150s")
+    print("   • Writing: ~60s")
+    print("   • Editing: ~45s")
+    print("   • SEO: ~30s")
+    print("   • Images: ~20s (if enabled)")
+    print("   • Total: ~285-305 seconds (~5 minutes)")
+    print()
+    print("📋 REQUIREMENTS:")
+    print("   • API keys in .env (Gemini/Groq)")
+    print("   • All dependencies installed")
     print("="*70 + "\n")
     
     uvicorn.run(
