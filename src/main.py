@@ -81,7 +81,7 @@ def generate_single_attempt(config, attempt_num):
     
     try:
         console.print(f"\n[cyan]⏳ Generating (Attempt {attempt_num})...[/cyan]")
-        console.print("[dim]This takes approximately 90 seconds[/dim]\n")   
+        console.print("[dim]This takes approximately few minutes[/dim]\n")   
         
         # Simple 1-line progress updates
         console.print("[cyan]🔍 Research...[/cyan]", end=" ")

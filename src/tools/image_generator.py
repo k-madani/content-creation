@@ -36,6 +36,59 @@ class ImageGenerator:
         
         # Topic-to-visual mapping - HIGHLY VARIED CONCEPTS
         self.visual_concepts = {
+            # TRAVEL & TOURISM
+            'travel': [
+                'iconic city skyline at sunset with famous landmarks',
+                'busy airport terminal with travelers and departure boards',
+                'traveler with backpack looking at scenic mountain vista'
+            ],
+            'nyc': [
+                'new york city skyline with empire state building and skyscrapers',
+                'times square at night with bright neon lights and crowds',
+                'brooklyn bridge with manhattan skyline in background'
+            ],
+            'new york': [
+                'statue of liberty with new york harbor',
+                'yellow taxi cabs on busy manhattan street',
+                'central park aerial view with city buildings surrounding'
+            ],
+            'itinerary': [
+                'tourist exploring city street with map and camera',
+                'travel planning with guidebook and smartphone on table',
+                'scenic viewpoint overlooking famous city landmarks'
+            ],
+            'tourism': [
+                'diverse group of tourists taking photos at landmark',
+                'travel destinations collage with famous monuments',
+                'vacation resort with palm trees and ocean view'
+            ],
+            # FOOD & DINING
+            'food': [
+                'colorful fresh ingredients arranged on rustic wooden table',
+                'chef preparing gourmet dish in professional kitchen',
+                'beautifully plated meal with artistic presentation'
+            ],
+            'restaurant': [
+                'elegant restaurant interior with warm ambient lighting',
+                'diverse international cuisine dishes on table',
+                'bustling street food market with vendors and customers'
+            ],
+            'eateries': [
+                'cozy neighborhood cafe with outdoor seating',
+                'food hall with multiple cuisine stalls and diners',
+                'authentic ethnic restaurant with traditional decor'
+            ],
+            'cuisine': [
+                'variety of international dishes from different cultures',
+                'sushi platter with fresh fish and artistic arrangement',
+                'italian pasta dish with fresh herbs and ingredients'
+            ],
+            'recipe': [
+                'cooking ingredients laid out with recipe book',
+                'hands kneading dough on flour-covered surface',
+                'finished homemade dish garnished and ready to serve'
+            ],
+            # TECHNOLOGY
             'technology': [
                 'futuristic server room with glowing cables and network equipment',
                 'abstract digital data streams and particles in space',
@@ -108,9 +161,14 @@ class ImageGenerator:
             ]
         }
     
-    def generate_images_for_content(self, content: str, tone: str, 
-                                    num_images: int = 3, 
-                                    base_filename: str = "content") -> List[Dict]:
+    def generate_images_for_content(
+        self, content, tone, num_images, base_filename,
+        user_topic=None 
+    ):
+        if user_topic:
+            topic = user_topic.lower() 
+        else:
+            topic = self._extract_main_topic(content)
         """
         Generate visually relevant images without text
         """
@@ -217,22 +275,39 @@ class ImageGenerator:
         scenes = []
         topic_lower = topic.lower()
         
-        # Match topic to visual concepts
+        # Match topic to visual concepts - IMPROVED MATCHING
         matched_visuals = []
+        matched_categories = []
+        
         for keyword, visuals in self.visual_concepts.items():
             if keyword in topic_lower:
                 matched_visuals.extend(visuals)
+                matched_categories.append(keyword)
         
-        # If no matches, use varied generic scenes
+        # If no direct matches, check for related terms
+        if not matched_visuals:
+            # Travel/location related
+            if any(word in topic_lower for word in ['city', 'destination', 'trip', 'visit', 'guide', 'tour']):
+                matched_visuals.extend(self.visual_concepts['travel'])
+                matched_categories.append('travel')
+            
+            # Food related
+            if any(word in topic_lower for word in ['eat', 'dining', 'menu', 'cooking', 'dish', 'meal']):
+                matched_visuals.extend(self.visual_concepts['food'])
+                matched_categories.append('food')
+        
+        # Still no matches? Use varied generic scenes
         if not matched_visuals:
             matched_visuals = [
-                'modern professional office space with glass walls',
-                'abstract technology concept with circuit boards and electronics',
-                'business meeting room with large windows and city view'
+                'modern professional workspace with natural lighting and city view',
+                'abstract concept visualization with colorful geometric shapes',
+                'collaborative environment with people working together creatively'
             ]
+            matched_categories = ['generic']
+        
+        console.print(f"[dim]  → Matched categories: {', '.join(matched_categories)}[/dim]")
         
         # ENSURE VARIETY: Use different concepts for each image
-        # Pad list if needed
         while len(matched_visuals) < num_scenes:
             matched_visuals.extend(matched_visuals[:num_scenes - len(matched_visuals)])
         

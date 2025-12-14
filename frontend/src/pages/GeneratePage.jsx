@@ -490,7 +490,7 @@ export default function GeneratePage({ mode, onBack, onHome, onGenerate }) {
             </div>
 
             <p className="text-sm text-gray-500 text-center mt-8">
-              {includeImages ? 'This usually takes about 60-90 seconds with images' : 'This usually takes about 45-60 seconds'}
+              {includeImages ? 'This usually takes about few minutes with images' : 'This usually takes about 2-3 minutes'}
             </p>
           </div>
         )}
