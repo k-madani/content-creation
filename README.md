@@ -258,24 +258,3 @@ grade = 'A-'
 **Problem:** Variable output quality (60-95)  
 **Solution:** 4D scoring + auto-regeneration loop  
 **Result:** 87/100 average, 97% success rate
-
-```
-Metric              Average    Range
-──────────────────────────────────────
-Word Count          2,247      800-4,000
-Quality Score       87/100     75-95
-SEO Score           93/100     80-100
-Readability         67/100     46-80
-Generation Time     163s       90-250s
-Research Time       162.9s     90-170s
-Writing Time        0-3s       0-5s
-Editing Time        0-2s       0-3s
-SEO Time            0-2s       0-3s
-Success Rate        97%        -
-Cost per Article    $0.00      $0.00
-```
-
-**Links:**
-- Documentation: [Technical Report](./docs/technical_documentation.pdf)
-- Architecture: [System Diagram](./docs/architecture.svg)
-- Data Flow: [Flow Diagram](./docs/dataflow.svg)

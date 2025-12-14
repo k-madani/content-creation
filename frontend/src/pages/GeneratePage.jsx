@@ -20,10 +20,8 @@ export default function GeneratePage({ mode, onBack, onHome, onGenerate }) {
   const [selectedTitle, setSelectedTitle] = useState(0);
   const [serverStatus, setServerStatus] = useState('checking');
   const [isGeneratingTitles, setIsGeneratingTitles] = useState(false);
-
   const [isGenerating, setIsGenerating] = useState(false);
   
-  // 🎨 UPDATED: Added 'images' stage
   const [progress, setProgress] = useState({
     research: { status: 'pending', progress: 0 },
     writing: { status: 'pending', progress: 0 },
@@ -32,7 +30,6 @@ export default function GeneratePage({ mode, onBack, onHome, onGenerate }) {
     images: { status: 'pending', progress: 0 }
   });
 
-  // Check backend health on mount
   useEffect(() => {
     checkServerHealth();
   }, []);
@@ -50,7 +47,7 @@ export default function GeneratePage({ mode, onBack, onHome, onGenerate }) {
     }
   };
 
-  const generateTitles = () => {
+  const generateTitles = async () => {
     if (!topic.trim()) {
       alert('Please enter a topic first');
       return;
@@ -58,8 +55,28 @@ export default function GeneratePage({ mode, onBack, onHome, onGenerate }) {
 
     setIsGeneratingTitles(true);
 
-    // Simulate API delay
-    setTimeout(() => {
+    try {
+      const response = await fetch(`${API_URL}/api/generate-titles`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ topic, tone })
+      });
+
+      if (response.ok) {
+        const { titles } = await response.json();
+        setGeneratedTitles(titles);
+      } else {
+        const titles = [
+          `The Complete Guide to ${topic}`,
+          `Understanding ${topic}: Key Insights for 2024`,
+          `${topic}: Everything You Need to Know`,
+          `Mastering ${topic}: Expert Tips and Strategies`,
+          `${topic} Explained: A Comprehensive Overview`
+        ];
+        setGeneratedTitles(titles);
+      }
+    } catch (error) {
+      console.error('Title generation error:', error);
       const titles = [
         `The Complete Guide to ${topic}`,
         `Understanding ${topic}: Key Insights for 2024`,
@@ -67,10 +84,10 @@ export default function GeneratePage({ mode, onBack, onHome, onGenerate }) {
         `Mastering ${topic}: Expert Tips and Strategies`,
         `${topic} Explained: A Comprehensive Overview`
       ];
-      
       setGeneratedTitles(titles);
+    } finally {
       setIsGeneratingTitles(false);
-    }, 800);
+    }
   };
 
   const handleGenerate = async () => {
@@ -86,7 +103,6 @@ export default function GeneratePage({ mode, onBack, onHome, onGenerate }) {
 
     setIsGenerating(true);
 
-    // Reset progress (including images stage)
     setProgress({
       research: { status: 'pending', progress: 0 },
       writing: { status: 'pending', progress: 0 },
@@ -184,7 +200,6 @@ export default function GeneratePage({ mode, onBack, onHome, onGenerate }) {
       />
 
       <div className="max-w-4xl mx-auto px-6 py-12">
-        {/* Server Status Banner */}
         {serverStatus === 'disconnected' && !isGenerating && (
           <div className="bg-red-50 border-2 border-red-200 rounded-lg p-4 mb-6">
             <div className="flex items-start gap-3">
@@ -218,7 +233,6 @@ export default function GeneratePage({ mode, onBack, onHome, onGenerate }) {
             <h2 className="text-3xl font-display font-bold mb-8" style={{ color: '#072e57' }}>What do you want to write about?</h2>
 
             <div className="space-y-6">
-              {/* Topic - ALL MODES */}
               <div>
                 <label className="block text-sm font-semibold mb-2" style={{ color: '#072e57' }}>Topic *</label>
                 <input
@@ -231,7 +245,6 @@ export default function GeneratePage({ mode, onBack, onHome, onGenerate }) {
                 />
               </div>
 
-              {/* Tone - GUIDED & CUSTOM */}
               {(mode === 'guided' || mode === 'custom') && (
                 <div>
                   <label className="block text-sm font-semibold mb-2" style={{ color: '#072e57' }}>Tone</label>
@@ -250,7 +263,6 @@ export default function GeneratePage({ mode, onBack, onHome, onGenerate }) {
                 </div>
               )}
 
-              {/* Audience - CUSTOM ONLY */}
               {mode === 'custom' && (
                 <div>
                   <label className="block text-sm font-semibold mb-2" style={{ color: '#072e57' }}>Target Audience</label>
@@ -265,7 +277,6 @@ export default function GeneratePage({ mode, onBack, onHome, onGenerate }) {
                 </div>
               )}
 
-              {/* Content Type - CUSTOM ONLY */}
               {mode === 'custom' && (
                 <div>
                   <label className="block text-sm font-semibold mb-2" style={{ color: '#072e57' }}>Content Type</label>
@@ -284,7 +295,6 @@ export default function GeneratePage({ mode, onBack, onHome, onGenerate }) {
                 </div>
               )}
 
-              {/* Title - GUIDED & CUSTOM */}
               {(mode === 'guided' || mode === 'custom') && (
                 <div>
                   <label className="block text-sm font-semibold mb-2" style={{ color: '#072e57' }}>Title</label>
@@ -371,7 +381,6 @@ export default function GeneratePage({ mode, onBack, onHome, onGenerate }) {
                 </div>
               )}
 
-              {/* Word Count - GUIDED & CUSTOM */}
               {(mode === 'guided' || mode === 'custom') && (
                 <div>
                   <label className="block text-sm font-semibold mb-2" style={{ color: '#072e57' }}>Word Count</label>
@@ -385,7 +394,6 @@ export default function GeneratePage({ mode, onBack, onHome, onGenerate }) {
                 </div>
               )}
 
-              {/* Images - GUIDED & CUSTOM */}
               {(mode === 'guided' || mode === 'custom') && (
                 <div>
                   <label className="block text-sm font-semibold mb-2" style={{ color: '#072e57' }}>Include Images?</label>
@@ -432,7 +440,6 @@ export default function GeneratePage({ mode, onBack, onHome, onGenerate }) {
                 </div>
               )}
 
-              {/* Keywords - GUIDED & CUSTOM */}
               {(mode === 'guided' || mode === 'custom') && (
                 <div>
                   <label className="block text-sm font-semibold mb-2" style={{ color: '#072e57' }}>
@@ -449,7 +456,6 @@ export default function GeneratePage({ mode, onBack, onHome, onGenerate }) {
                 </div>
               )}
 
-              {/* Quality Threshold - CUSTOM ONLY */}
               {mode === 'custom' && (
                 <div>
                   <label className="block text-sm font-semibold mb-2" style={{ color: '#072e57' }}>
